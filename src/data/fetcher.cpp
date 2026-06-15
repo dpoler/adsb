@@ -127,6 +127,19 @@ static bool check_emergency(uint16_t squawk) {
     return squawk == 7500 || squawk == 7600 || squawk == 7700;
 }
 
+// Returns true for known ADS-B test/synthetic transmitters that should be excluded.
+// QPK## = FAA Performance Monitoring Units (Sabre Industries), fixed ground transmitters
+//         used to verify ADS-B receiver network coverage — common in western US.
+// TEST/TSTR = generic test transponder callsign prefixes.
+// 000000 = globally reserved ICAO address, never assigned to a real aircraft.
+static bool is_test_signal(const char *hex, const char *callsign) {
+    if (strncmp(callsign, "QPK",  3) == 0) return true;
+    if (strncmp(callsign, "TEST", 4) == 0) return true;
+    if (strncmp(callsign, "TSTR", 4) == 0) return true;
+    if (strcmp(hex, "000000")         == 0) return true;
+    return false;
+}
+
 // Find existing aircraft by ICAO hex, returns index or -1
 static int find_aircraft(const char *hex) {
     for (int i = 0; i < _aircraft_list->count; i++) {
@@ -218,6 +231,7 @@ static void parse_aircraft_json(JsonDocument &doc) {
         strlcpy(p.callsign, obj["flight"] | "", sizeof(p.callsign));
         for (int i = strlen(p.callsign) - 1; i >= 0 && p.callsign[i] == ' '; i--)
             p.callsign[i] = '\0';
+        if (is_test_signal(p.hex, p.callsign)) continue;
         strlcpy(p.registration, obj["r"] | "", sizeof(p.registration));
         strlcpy(p.type_code, obj["t"] | "", sizeof(p.type_code));
         strlcpy(p.category, obj["category"] | "", sizeof(p.category));
