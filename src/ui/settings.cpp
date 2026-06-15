@@ -20,6 +20,7 @@ static lv_obj_t *_slider_radius = nullptr;
 static lv_obj_t *_radius_label = nullptr;
 static lv_obj_t *_sw_metric = nullptr;
 static lv_obj_t *_sw_ethernet = nullptr;
+static lv_obj_t *_btn_show_pass = nullptr;
 static lv_obj_t *_sw_alert_mil = nullptr;
 static lv_obj_t *_sw_alert_emg = nullptr;
 static lv_obj_t *_sw_autofocus = nullptr;
@@ -182,6 +183,25 @@ void settings_init(lv_obj_t *parent) {
     create_label(_panel, "WiFi Password", 0, 96);
     _ta_pass = create_textarea(_panel, "Password", _cfg.wifi_pass, 0, 114, true);
 
+    _btn_show_pass = lv_button_create(_panel);
+    lv_obj_set_size(_btn_show_pass, 34, 36);
+    lv_obj_set_pos(_btn_show_pass, FIELD_W + 4, 114);
+    lv_obj_set_style_bg_color(_btn_show_pass, lv_color_hex(0x1a1a3a), 0);
+    lv_obj_set_style_border_color(_btn_show_pass, lv_color_hex(0x333366), 0);
+    lv_obj_set_style_border_width(_btn_show_pass, 1, 0);
+    lv_obj_set_style_radius(_btn_show_pass, 4, 0);
+    lv_obj_set_style_shadow_width(_btn_show_pass, 0, 0);
+    { lv_obj_t *lbl = lv_label_create(_btn_show_pass);
+      lv_label_set_text(lbl, LV_SYMBOL_EYE_OPEN);
+      lv_obj_set_style_text_color(lbl, lv_color_hex(0x8888aa), 0);
+      lv_obj_center(lbl); }
+    lv_obj_add_event_cb(_btn_show_pass, [](lv_event_t *e) {
+        bool pw = lv_textarea_get_password_mode(_ta_pass);
+        lv_textarea_set_password_mode(_ta_pass, !pw);
+        lv_obj_t *lbl = lv_obj_get_child(lv_event_get_target_obj(e), 0);
+        lv_label_set_text(lbl, pw ? LV_SYMBOL_EYE_CLOSE : LV_SYMBOL_EYE_OPEN);
+    }, LV_EVENT_CLICKED, nullptr);
+
     // Radius
     create_label(_panel, "Default Radius", 0, 158);
     _slider_radius = lv_slider_create(_panel);
@@ -323,6 +343,8 @@ void settings_show() {
     _cfg = storage_load_config();
     lv_textarea_set_text(_ta_ssid, _cfg.wifi_ssid);
     lv_textarea_set_text(_ta_pass, _cfg.wifi_pass);
+    lv_textarea_set_password_mode(_ta_pass, true);
+    lv_label_set_text(lv_obj_get_child(_btn_show_pass, 0), LV_SYMBOL_EYE_OPEN);
 
     char lat_str[16], lon_str[16];
     snprintf(lat_str, sizeof(lat_str), "%.4f", _cfg.home_lat);

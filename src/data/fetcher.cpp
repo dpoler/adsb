@@ -35,21 +35,33 @@ static void reset_wifi_c6() {
     digitalWrite(WIFI_C6_RST, LOW);
     vTaskDelay(pdMS_TO_TICKS(100));
     digitalWrite(WIFI_C6_RST, HIGH);
-    vTaskDelay(pdMS_TO_TICKS(500)); // let C6 boot
-    Serial.println("C6 reset complete");
+    // Poll until ESP-Hosted SDIO link is up rather than using a fixed delay
+    uint32_t t0 = millis();
+    wl_status_t s;
+    do {
+        vTaskDelay(pdMS_TO_TICKS(200));
+        s = WiFi.status();
+    } while (s == WL_NO_SHIELD && millis() - t0 < 10000);
+    vTaskDelay(pdMS_TO_TICKS(1000)); // let radio settle after SDIO link is up
+    Serial.printf("C6 reset complete (%lums, status=%d)\n", millis() - t0, (int)s);
 }
 
 // Attempt WiFi connection with timeout. Returns true if connected.
 static bool wifi_connect_with_timeout(uint32_t timeout_ms) {
-    WiFi.disconnect(true);
-    vTaskDelay(pdMS_TO_TICKS(200));
     WiFi.mode(WIFI_STA);
+    Serial.printf("WiFi connecting to '%s'...\n", g_config.wifi_ssid);
     WiFi.begin(g_config.wifi_ssid, g_config.wifi_pass);
 
     uint32_t start = millis();
     while (WiFi.status() != WL_CONNECTED) {
         if (millis() - start > timeout_ms) {
-            Serial.println("\nWiFi connect timeout");
+            wl_status_t s = WiFi.status();
+            const char *reason =
+                s == WL_NO_SSID_AVAIL  ? "SSID not found" :
+                s == WL_CONNECT_FAILED ? "wrong password" :
+                s == WL_CONNECTION_LOST? "connection lost" :
+                s == WL_DISCONNECTED   ? "disconnected (bad pw or DHCP?)" : "unknown";
+            Serial.printf("\nWiFi timeout (status %d: %s)\n", s, reason);
             return false;
         }
         vTaskDelay(pdMS_TO_TICKS(500));
