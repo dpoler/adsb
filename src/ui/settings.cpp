@@ -16,8 +16,8 @@ static lv_obj_t *_ta_lat = nullptr;
 static lv_obj_t *_ta_lon = nullptr;
 
 // Controls
-static lv_obj_t *_slider_radius = nullptr;
-static lv_obj_t *_radius_label = nullptr;
+static lv_obj_t *_radius_btns[3] = {nullptr, nullptr, nullptr};
+static const int _radius_values[] = {5, 20, 50};
 static lv_obj_t *_sw_metric = nullptr;
 static lv_obj_t *_sw_ethernet = nullptr;
 static lv_obj_t *_btn_show_pass = nullptr;
@@ -99,6 +99,25 @@ static lv_obj_t *create_switch(lv_obj_t *parent, int x, int y, bool checked) {
     return sw;
 }
 
+static void radius_btn_select(int nm) {
+    // Snap to nearest valid value
+    int best = _radius_values[2]; // default 50
+    int best_diff = 9999;
+    for (int i = 0; i < 3; i++) {
+        int diff = abs(_radius_values[i] - nm);
+        if (diff < best_diff) { best_diff = diff; best = _radius_values[i]; }
+    }
+    _cfg.radius_nm = best;
+    for (int i = 0; i < 3; i++) {
+        bool active = (_radius_values[i] == best);
+        lv_obj_set_style_bg_color(_radius_btns[i],
+            active ? ACCENT_COLOR : lv_color_hex(0x1a1a3a), 0);
+        lv_obj_t *lbl = lv_obj_get_child(_radius_btns[i], 0);
+        lv_obj_set_style_text_color(lbl,
+            active ? lv_color_black() : lv_color_hex(0x8888aa), 0);
+    }
+}
+
 static void save_and_close(lv_event_t *e) {
     bool old_use_ethernet = _cfg.use_ethernet;
 
@@ -109,7 +128,7 @@ static void save_and_close(lv_event_t *e) {
     _cfg.wifi_pass[sizeof(_cfg.wifi_pass) - 1] = '\0';
     _cfg.home_lat = atof(lv_textarea_get_text(_ta_lat));
     _cfg.home_lon = atof(lv_textarea_get_text(_ta_lon));
-    _cfg.radius_nm = lv_slider_get_value(_slider_radius);
+    // _cfg.radius_nm already updated live by radius_btn_select on button press
     _cfg.use_metric = lv_obj_has_state(_sw_metric, LV_STATE_CHECKED);
     _cfg.use_ethernet = lv_obj_has_state(_sw_ethernet, LV_STATE_CHECKED);
     _cfg.alert_military = lv_obj_has_state(_sw_alert_mil, LV_STATE_CHECKED);
@@ -202,27 +221,30 @@ void settings_init(lv_obj_t *parent) {
         lv_label_set_text(lbl, pw ? LV_SYMBOL_EYE_CLOSE : LV_SYMBOL_EYE_OPEN);
     }, LV_EVENT_CLICKED, nullptr);
 
-    // Radius
+    // Default Radius — radio buttons: 5nm / 20nm / 50nm
     create_label(_panel, "Default Radius", 0, 158);
-    _slider_radius = lv_slider_create(_panel);
-    lv_obj_set_size(_slider_radius, 150, 10);
-    lv_obj_set_pos(_slider_radius, 0, 178);
-    lv_slider_set_range(_slider_radius, 5, 150);
-    lv_slider_set_value(_slider_radius, _cfg.radius_nm, LV_ANIM_OFF);
-    lv_obj_set_style_bg_color(_slider_radius, lv_color_hex(0x333366), 0);
-    lv_obj_set_style_bg_color(_slider_radius, ACCENT_COLOR, LV_PART_INDICATOR);
-    lv_obj_set_style_bg_color(_slider_radius, ACCENT_COLOR, LV_PART_KNOB);
-
-    _radius_label = lv_label_create(_panel);
-    lv_label_set_text_fmt(_radius_label, "%d nm", _cfg.radius_nm);
-    lv_obj_set_style_text_color(_radius_label, lv_color_white(), 0);
-    lv_obj_set_style_text_font(_radius_label, &lv_font_montserrat_14, 0);
-    lv_obj_set_pos(_radius_label, 160, 174);
-
-    lv_obj_add_event_cb(_slider_radius, [](lv_event_t *e) {
-        int val = lv_slider_get_value(lv_event_get_target_obj(e));
-        lv_label_set_text_fmt(_radius_label, "%d nm", val);
-    }, LV_EVENT_VALUE_CHANGED, nullptr);
+    static const char *radius_btn_labels[] = {"5nm", "20nm", "50nm"};
+    for (int i = 0; i < 3; i++) {
+        _radius_btns[i] = lv_obj_create(_panel);
+        lv_obj_set_size(_radius_btns[i], 60, 30);
+        lv_obj_set_pos(_radius_btns[i], i * 68, 178);
+        lv_obj_set_style_bg_color(_radius_btns[i], lv_color_hex(0x1a1a3a), 0);
+        lv_obj_set_style_bg_opa(_radius_btns[i], LV_OPA_COVER, 0);
+        lv_obj_set_style_border_color(_radius_btns[i], lv_color_hex(0x333366), 0);
+        lv_obj_set_style_border_width(_radius_btns[i], 1, 0);
+        lv_obj_set_style_radius(_radius_btns[i], 6, 0);
+        lv_obj_set_style_pad_all(_radius_btns[i], 0, 0);
+        lv_obj_clear_flag(_radius_btns[i], LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_t *lbl = lv_label_create(_radius_btns[i]);
+        lv_label_set_text(lbl, radius_btn_labels[i]);
+        lv_obj_set_style_text_font(lbl, &lv_font_montserrat_14, 0);
+        lv_obj_set_style_text_color(lbl, lv_color_hex(0x8888aa), 0);
+        lv_obj_center(lbl);
+        lv_obj_add_event_cb(_radius_btns[i], [](lv_event_t *e) {
+            radius_btn_select(_radius_values[(int)(intptr_t)lv_event_get_user_data(e)]);
+        }, LV_EVENT_CLICKED, (void *)(intptr_t)i);
+    }
+    radius_btn_select(_cfg.radius_nm);
 
     // Metric
     create_label(_panel, "Metric Units", 0, 202);
@@ -352,8 +374,7 @@ void settings_show() {
     lv_textarea_set_text(_ta_lat, lat_str);
     lv_textarea_set_text(_ta_lon, lon_str);
 
-    lv_slider_set_value(_slider_radius, _cfg.radius_nm, LV_ANIM_OFF);
-    lv_label_set_text_fmt(_radius_label, "%d nm", _cfg.radius_nm);
+    radius_btn_select(_cfg.radius_nm);
 
     if (_cfg.use_metric) lv_obj_add_state(_sw_metric, LV_STATE_CHECKED);
     else lv_obj_clear_state(_sw_metric, LV_STATE_CHECKED);

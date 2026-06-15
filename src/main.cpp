@@ -15,6 +15,7 @@
 #include "ui/detail_card.h"
 #include "ui/alerts.h"
 #include "ui/settings.h"
+#include "ui/range.h"
 #include "ui/tile_cache.h"
 #include "ui/map_view.h"
 #include "ui/radar_view.h"
@@ -130,6 +131,9 @@ void setup() {
     // Init aircraft data
     aircraft_list.init();
 
+    // Load config before UI so views init with the correct range
+    g_config = storage_load_config();
+
     // Create UI — LVGL must be fully set up before background tasks
     lv_obj_t *screen = lv_screen_active();
     lv_obj_set_style_bg_color(screen, lv_color_hex(0x0a0a1a), 0);
@@ -141,6 +145,7 @@ void setup() {
     Serial.println("Status bar OK");
 
     Serial.println("views_init...");
+    range_set_default(g_config.radius_nm);
     views_init(screen, &aircraft_list);
     Serial.println("views OK");
 
@@ -156,15 +161,13 @@ void setup() {
     settings_init(screen);
     Serial.println("settings OK");
 
-    // Load runtime config
-    g_config = storage_load_config();
-
     status_bar_set_gear_callback([](lv_event_t *e) {
         settings_show();
     });
 
     settings_set_change_callback([](const UserConfig *cfg) {
         g_config = *cfg;
+        range_set_default(cfg->radius_nm);
     });
 
     // Periodic status bar update

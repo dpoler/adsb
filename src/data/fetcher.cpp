@@ -454,16 +454,19 @@ static void fetch_task(void *param) {
             update_ip_addr();
         }
 
-        // Watchdog: too many consecutive failures → reset WiFi
+        // Watchdog: restart only when WiFi itself is down.
+        // API outages (WiFi up, server unreachable) just keep retrying — restarting won't help.
+        // Resetting only the C6 mid-session corrupts the SDIO bus, so we do a full P4 restart.
         if (!g_config.use_ethernet && consecutive_fails >= FETCH_FAIL_RESET_THRESHOLD) {
-            Serial.printf("Watchdog: %d consecutive fails, resetting WiFi\n", consecutive_fails);
-            error_log_add("Watchdog: %d fails, C6 reset", consecutive_fails);
-            reset_wifi_c6();
-            if (wifi_connect_with_timeout(WIFI_CONNECT_TIMEOUT_MS)) {
-                update_ip_addr();
-                Serial.printf("WiFi reconnected: %s\n", _fstats.ip_addr);
+            if (!network_connected()) {
+                Serial.printf("Watchdog: %d fails, WiFi down — restarting\n", consecutive_fails);
+                error_log_add("Watchdog: %d fails, restarting", consecutive_fails);
+                vTaskDelay(pdMS_TO_TICKS(500));
+                ESP.restart();
+            } else {
+                Serial.printf("Watchdog: %d API fails, WiFi up — continuing\n", consecutive_fails);
+                consecutive_fails = 0;
             }
-            consecutive_fails = 0;
         }
 
         vTaskDelay(pdMS_TO_TICKS(ADSB_POLL_INTERVAL_MS));
