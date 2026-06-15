@@ -680,13 +680,15 @@ void map_view_init(lv_obj_t *parent, AircraftList *list) {
     lv_obj_set_style_radius(_canvas, 0, 0);
     lv_obj_set_style_pad_all(_canvas, 0, 0);
     lv_obj_clear_flag(_canvas, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_clear_flag(_canvas, LV_OBJ_FLAG_SCROLL_CHAIN); // prevent tileview from stealing clicks
+    lv_obj_clear_flag(_canvas, LV_OBJ_FLAG_SCROLL_CHAIN);
+    views_attach_swipe(_canvas);
 
     lv_obj_add_event_cb(_canvas, canvas_draw_cb, LV_EVENT_DRAW_MAIN_END, nullptr);
 
-    // Tap: aircraft hit-test -> detail card (PRESSED for instant response)
+    // Tap: aircraft hit-test -> detail card
     lv_obj_add_event_cb(_canvas, [](lv_event_t *e) {
         if (views_get_active_index() != VIEW_MAP) return;
+        if (views_swipe_active()) { views_clear_swipe(); return; }
 
         // Guard: skip if a filter button was just clicked
         if (_filter_just_clicked) {
@@ -725,7 +727,7 @@ void map_view_init(lv_obj_t *parent, AircraftList *list) {
         _list->unlock();
         // Tapped empty space — clear tracking
         _tracked_hex[0] = '\0';
-    }, LV_EVENT_PRESSED, nullptr);
+    }, LV_EVENT_CLICKED, nullptr);
 
     // Filter toggle buttons — vertical stack on right edge
     int btn_w = 64;

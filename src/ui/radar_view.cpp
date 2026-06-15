@@ -415,12 +415,14 @@ void radar_view_init(lv_obj_t *parent, AircraftList *list) {
     lv_obj_set_style_border_width(_radar_obj, 0, 0);
     lv_obj_set_style_radius(_radar_obj, 0, 0);
     lv_obj_clear_flag(_radar_obj, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_clear_flag(_radar_obj, LV_OBJ_FLAG_SCROLL_CHAIN); // prevent tileview from stealing clicks
+    lv_obj_clear_flag(_radar_obj, LV_OBJ_FLAG_SCROLL_CHAIN);
+    views_attach_swipe(_radar_obj);
 
     lv_obj_add_event_cb(_radar_obj, radar_draw_cb, LV_EVENT_DRAW_MAIN_END, nullptr);
 
     lv_obj_add_event_cb(_radar_obj, [](lv_event_t *e) {
         if (views_get_active_index() != VIEW_RADAR) return;
+        if (views_swipe_active()) { views_clear_swipe(); return; }
 
         if (_filter_just_clicked) {
             _filter_just_clicked = false;
@@ -437,7 +439,7 @@ void radar_view_init(lv_obj_t *parent, AircraftList *list) {
             return;
         }
 
-        // Hit test (30px radius, PRESSED for instant response)
+        // Hit test (30px radius)
         if (!_list->lock(pdMS_TO_TICKS(10))) return;
         for (int i = 0; i < _list->count; i++) {
             int sx, sy;
@@ -453,7 +455,7 @@ void radar_view_init(lv_obj_t *parent, AircraftList *list) {
             }
         }
         _list->unlock();
-    }, LV_EVENT_PRESSED, nullptr);
+    }, LV_EVENT_CLICKED, nullptr);
 
     // Filter toggle buttons — vertical stack on right edge (same layout as map)
     {

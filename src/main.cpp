@@ -122,7 +122,7 @@ void setup() {
     lv_indev_set_type(indev, LV_INDEV_TYPE_POINTER);
     lv_indev_set_read_cb(indev, touch_read_cb);
     lv_indev_set_display(indev, disp);
-    lv_indev_set_scroll_limit(indev, 10); // low for fast swipe response, touchscreen jitter handled by gesture threshold
+    lv_indev_set_scroll_limit(indev, 10);
 
     // Poll touch at 10ms (vs 30ms default) — catches fast taps between render frames
     lv_timer_set_period(lv_indev_get_read_timer(indev), 10);

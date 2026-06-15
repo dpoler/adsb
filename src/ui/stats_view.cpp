@@ -370,6 +370,8 @@ void stats_view_init(lv_obj_t *parent, AircraftList *list) {
     lv_obj_set_style_radius(_container, 0, 0);
     lv_obj_set_style_pad_all(_container, 0, 0);
     lv_obj_clear_flag(_container, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_clear_flag(_container, LV_OBJ_FLAG_SCROLL_CHAIN);
+    views_attach_swipe(_container);
 
     // ============================================================
     // LEFT COLUMN (x=15): Aircraft tracking

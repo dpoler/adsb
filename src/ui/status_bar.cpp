@@ -62,10 +62,8 @@ lv_obj_t *status_bar_create(lv_obj_t *parent) {
         lv_obj_clear_flag(nav_btns[i], LV_OBJ_FLAG_SCROLLABLE);
         lv_obj_clear_flag(nav_btns[i], LV_OBJ_FLAG_SCROLL_CHAIN);
         lv_obj_add_event_cb(nav_btns[i], [](lv_event_t *e) {
-            int idx = (int)(intptr_t)lv_event_get_user_data(e);
-            views_pause_cycle();
-            lv_tileview_set_tile_by_index(views_get_tileview(), idx, 0, LV_ANIM_OFF);
-        }, LV_EVENT_CLICKED, (void *)(intptr_t)i);
+            views_switch_to((int)(intptr_t)lv_event_get_user_data(e));
+        }, LV_EVENT_PRESSED, (void *)(intptr_t)i);
 
         nav_labels[i] = lv_label_create(nav_btns[i]);
         lv_label_set_text(nav_labels[i], NAV_NAMES[i]);

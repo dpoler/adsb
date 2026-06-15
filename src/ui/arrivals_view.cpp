@@ -17,11 +17,7 @@ static lv_obj_t *_range_label = nullptr;
 #define BOARD_W LCD_H_RES
 #define BOARD_H (LCD_V_RES - 30)
 
-// Split-flap cell dimensions
-#define CELL_W 18
 #define CELL_H 28
-#define CELL_GAP 2
-#define CELL_RADIUS 3
 #define ROW_H (CELL_H + 4)
 #define TITLE_H 30
 #define COL_HEADER_H 18
@@ -50,46 +46,33 @@ static SortMode _sort_dir = SORT_ASC; // ascending by default
 
 // Colors
 #define BOARD_BG      lv_color_hex(0x0c0c0c)
-#define CELL_BG       lv_color_hex(0x1a1a1a)
 #define CELL_TEXT     lv_color_hex(0xffdd00)  // classic Solari yellow
 #define HEADER_TEXT   lv_color_hex(0xffffff)
 #define HEADER_BG     lv_color_hex(0x222222)
 #define EMERGENCY_CLR lv_color_hex(0xff3333)
 #define MILITARY_CLR  lv_color_hex(0xffaa44)
 
-// Column definitions: name, character width, x offset
 struct Column {
     const char *name;
-    int chars;
     int x;
     bool sortable;
 };
 
 static Column columns[] = {
-    {"FLIGHT",   8,  10,  true},
-    {"TYPE",     4,  180, false},
-    {"ROUTE",    7,  280, false},
-    {"ALT",      4,  430, true},
-    {"SPD",      3,  520, true},
-    {"DIST",     4,  600, true},
-    {"HDG",      3,  700, false},
-    {"STATUS",   7,  780, false},
+    {"FLIGHT",  10,  true},
+    {"TYPE",   180, false},
+    {"ROUTE",  280, false},
+    {"ALT",    430, true},
+    {"SPD",    520, true},
+    {"DIST",   600, true},
+    {"HDG",    700, false},
+    {"STATUS", 780, false},
 };
 #define NUM_COLS 8
 
-// Per-cell animation state
-struct FlipCell {
-    lv_obj_t *label;
-    char target;
-    char current;
-    int rolls_remaining; // 0 = settled, >0 = still flipping
-    char buf[2];         // static buffer for lv_label_set_text_static
-};
-
 struct BoardRow {
-    FlipCell cells[48]; // max characters across all columns
-    int total_cells;
-    char icao_hex[7];   // to track which aircraft this row represents
+    lv_obj_t *col_labels[NUM_COLS];
+    char icao_hex[7];
     bool active;
 };
 
@@ -104,121 +87,42 @@ static const char *status_from_vert_rate(int16_t vr, bool on_ground) {
     return "CRUISE ";
 }
 
-// Create a single flip cell — label with bg styling (no separate container)
-static FlipCell create_cell(lv_obj_t *parent, int x, int y) {
-    FlipCell cell;
-    cell.target = ' ';
-    cell.current = ' ';
-    cell.rolls_remaining = 0;
-    cell.buf[0] = ' ';
-    cell.buf[1] = '\0';
-
-    // Single label with background — eliminates separate bg container (halves object count)
-    cell.label = lv_label_create(parent);
-    lv_label_set_text_static(cell.label, cell.buf);
-    lv_obj_set_size(cell.label, CELL_W, CELL_H);
-    lv_obj_set_pos(cell.label, x, y);
-    lv_obj_set_style_bg_color(cell.label, CELL_BG, 0);
-    lv_obj_set_style_bg_opa(cell.label, LV_OPA_COVER, 0);
-    lv_obj_set_style_radius(cell.label, CELL_RADIUS, 0);
-    lv_obj_set_style_text_font(cell.label, &lv_font_montserrat_20, 0);
-    lv_obj_set_style_text_color(cell.label, CELL_TEXT, 0);
-    lv_obj_set_style_text_align(cell.label, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_set_style_pad_top(cell.label, (CELL_H - 20) / 2, 0); // vertically center
-    lv_obj_clear_flag(cell.label, LV_OBJ_FLAG_CLICKABLE);
-
-    return cell;
-}
-
 static void init_rows(lv_obj_t *parent) {
     for (int row = 0; row < MAX_ROWS; row++) {
         int y = HEADER_H + row * ROW_H + 4;
-        int cell_idx = 0;
         _rows[row].active = false;
         memset(_rows[row].icao_hex, 0, sizeof(_rows[row].icao_hex));
-
         for (int col = 0; col < NUM_COLS; col++) {
-            for (int ch = 0; ch < columns[col].chars; ch++) {
-                int x = columns[col].x + ch * (CELL_W + CELL_GAP);
-                _rows[row].cells[cell_idx] = create_cell(parent, x, y);
-                cell_idx++;
-            }
+            lv_obj_t *lbl = lv_label_create(parent);
+            lv_obj_set_pos(lbl, columns[col].x, y);
+            lv_obj_set_style_text_font(lbl, &lv_font_montserrat_20, 0);
+            lv_obj_set_style_text_color(lbl, CELL_TEXT, 0);
+            lv_obj_clear_flag(lbl, LV_OBJ_FLAG_CLICKABLE);
+            lv_label_set_text(lbl, "");
+            _rows[row].col_labels[col] = lbl;
         }
-        _rows[row].total_cells = cell_idx;
     }
 }
 
-// Set a row's target text
-// rolls_base: 0 = instant, >0 = animate with this many base rolls (+ random jitter)
-static lv_color_t _row_colors[MAX_ROWS]; // track per-row color to skip unchanged writes
+static lv_color_t _row_colors[MAX_ROWS];
 
-static void set_row_text(int row, const char *texts[], lv_color_t color, int rolls_base) {
-    // Only update color if changed
-    if (_row_colors[row].red != color.red || _row_colors[row].green != color.green ||
-        _row_colors[row].blue != color.blue) {
+static void set_row_text(int row, const char *texts[], lv_color_t color) {
+    bool color_changed = (_row_colors[row].red != color.red ||
+                          _row_colors[row].green != color.green ||
+                          _row_colors[row].blue != color.blue);
+    if (color_changed) {
         _row_colors[row] = color;
-        int ci = 0;
         for (int col = 0; col < NUM_COLS; col++) {
-            for (int ch = 0; ch < columns[col].chars; ch++) {
-                lv_obj_set_style_text_color(_rows[row].cells[ci].label, color, 0);
-                ci++;
-            }
+            lv_obj_set_style_text_color(_rows[row].col_labels[col], color, 0);
         }
     }
-
-    int cell_idx = 0;
     for (int col = 0; col < NUM_COLS; col++) {
-        const char *text = texts[col];
-        int len = strlen(text);
-        for (int ch = 0; ch < columns[col].chars; ch++) {
-            char target = (ch < len) ? text[ch] : ' ';
-            FlipCell &fc = _rows[row].cells[cell_idx];
-
-            if (target != fc.current || rolls_base > 0) {
-                fc.target = target;
-                if (rolls_base > 0) {
-                    fc.rolls_remaining = rolls_base + (rand() % 3);
-                    fc.current = '\0'; // invalidate so settlement always fires after animation
-                } else {
-                    fc.rolls_remaining = 0;
-                    fc.current = target;
-                    fc.buf[0] = target;
-                    lv_label_set_text_static(fc.label, fc.buf);
-                }
-            }
-            cell_idx++;
+        if (strcmp(lv_label_get_text(_rows[row].col_labels[col]), texts[col]) != 0) {
+            lv_label_set_text(_rows[row].col_labels[col], texts[col]);
         }
     }
 }
 
-// Animation tick — called frequently to advance flip animations
-// Budget-capped to limit LVGL invalidation per tick
-#define FLIP_BUDGET 120  // max cell updates per tick
-
-static void flip_animation_tick(lv_timer_t *t) {
-    if (views_get_active_index() != VIEW_ARRIVALS) return;
-
-    static const char flip_chars[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 -./";
-    int updates = 0;
-
-    for (int row = 0; row < MAX_ROWS && updates < FLIP_BUDGET; row++) {
-        if (!_rows[row].active) continue;
-        for (int c = 0; c < _rows[row].total_cells && updates < FLIP_BUDGET; c++) {
-            FlipCell &fc = _rows[row].cells[c];
-            if (fc.rolls_remaining > 0) {
-                fc.buf[0] = flip_chars[rand() % (sizeof(flip_chars) - 1)];
-                lv_label_set_text_static(fc.label, fc.buf);
-                fc.rolls_remaining--;
-                updates++;
-            } else if (fc.current != fc.target) {
-                fc.buf[0] = fc.target;
-                lv_label_set_text_static(fc.label, fc.buf);
-                fc.current = fc.target;
-                updates++;
-            }
-        }
-    }
-}
 
 // Temporary struct for sorting aircraft indices
 struct SortEntry {
@@ -256,41 +160,10 @@ static int sort_compare(const void *a, const void *b) {
     return (_sort_dir == SORT_DESC) ? -cmp : cmp;
 }
 
-// Fill all rows with random gibberish (split-flap reset effect)
-// When true, next update_board renders instantly (no flip animation) — gibberish→data transition
-static bool _awaiting_data = true;
-
-static void reset_board_gibberish() {
-    static const char chars[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-    for (int row = 0; row < MAX_ROWS; row++) {
-        _rows[row].active = true;
-        memset(_rows[row].icao_hex, 0, sizeof(_rows[row].icao_hex));
-        for (int c = 0; c < _rows[row].total_cells; c++) {
-            FlipCell &fc = _rows[row].cells[c];
-            char ch = chars[rand() % (sizeof(chars) - 1)];
-            fc.buf[0] = ch;
-            lv_label_set_text_static(fc.label, fc.buf);
-            fc.current = ch;
-            fc.target = ch;
-            fc.rolls_remaining = 0;
-        }
-    }
-    _awaiting_data = true;
-}
-
-static float _last_range_nm = -1;
-
 // Update board data from aircraft list
 static void update_board(lv_timer_t *t) {
     if (views_get_active_index() != VIEW_ARRIVALS) return;
-    if (!_list->lock(pdMS_TO_TICKS(5))) return; // short timeout: skip update if data locked
-
-    // Track range changes — no gibberish reset, just let the normal update handle it
-    _last_range_nm = range_get_nm();
-
-    // First render after gibberish: animate the reveal (cascade top→bottom)
-    bool first_data = _awaiting_data;
-    if (_awaiting_data) _awaiting_data = false;
+    if (!_list->lock(pdMS_TO_TICKS(5))) return;
 
     // Build sortable index of aircraft with valid positions
     SortEntry entries[MAX_AIRCRAFT];
@@ -320,9 +193,6 @@ static void update_board(lv_timer_t *t) {
             uint8_t opa = compute_aircraft_opacity(ac.stale_since, now);
             if (opa == 0) continue;
         }
-
-        // No flip animation — render instantly
-        int rolls = 0;
 
         _rows[row].active = true;
         strlcpy(_rows[row].icao_hex, ac.icao_hex, sizeof(_rows[row].icao_hex));
@@ -364,17 +234,17 @@ static void update_board(lv_timer_t *t) {
                                   (color.blue * opa) / 255);
         }
 
-        set_row_text(row, texts, color, rolls);
+        set_row_text(row, texts, color);
         row++;
     }
 
     int displayed_count = row;  // save before clear loop overwrites row
 
-    // Clear remaining rows — always instant (no animation for blank rows)
+    // Clear rows below the displayed count
     for (; row < MAX_ROWS; row++) {
-        if (first_data || _rows[row].active) {
+        if (_rows[row].active) {
             const char *blanks[] = {"", "", "", "", "", "", "", ""};
-            set_row_text(row, blanks, CELL_TEXT, 0);
+            set_row_text(row, blanks, CELL_TEXT);
             _rows[row].active = false;
             memset(_rows[row].icao_hex, 0, sizeof(_rows[row].icao_hex));
         }
@@ -385,6 +255,10 @@ static void update_board(lv_timer_t *t) {
     lv_label_set_text(_range_label, range_label());
 
     _list->unlock();
+}
+
+void arrivals_view_on_show() {
+    update_board(nullptr);
 }
 
 // Update header label text to show sort indicator
@@ -436,10 +310,12 @@ void arrivals_view_init(lv_obj_t *parent, AircraftList *list) {
     lv_obj_set_style_radius(_board_container, 0, 0);
     lv_obj_set_style_pad_all(_board_container, 0, 0);
     lv_obj_clear_flag(_board_container, LV_OBJ_FLAG_SCROLLABLE);
-
     lv_obj_clear_flag(_board_container, LV_OBJ_FLAG_SCROLL_CHAIN);
+    views_attach_swipe(_board_container);
+
     lv_obj_add_event_cb(_board_container, [](lv_event_t *e) {
         if (views_get_active_index() != VIEW_ARRIVALS) return;
+        if (views_swipe_active()) { views_clear_swipe(); return; }
 
         if (detail_card_is_visible()) {
             detail_card_hide();
@@ -524,11 +400,7 @@ void arrivals_view_init(lv_obj_t *parent, AircraftList *list) {
     // Set initial sort indicator
     update_header_labels();
 
-    // Create all flip cells
     init_rows(_board_container);
-
-    // Pre-load: fill all cells with random static characters until real data arrives
-    reset_board_gibberish();
 
     // Range label — bottom-right, tappable
     _range_label = lv_label_create(parent);
@@ -543,10 +415,7 @@ void arrivals_view_init(lv_obj_t *parent, AircraftList *list) {
         lv_label_set_text(_range_label, range_label());
     }, LV_EVENT_CLICKED, nullptr);
 
-    // Flip animation timer — 60ms tick, high budget for fast settlement
-    lv_timer_create(flip_animation_tick, 60, nullptr);
-
-    // Data update timer (sync with fetch interval)
+    // Data update timer
     lv_timer_create(update_board, 2000, nullptr);
 }
 

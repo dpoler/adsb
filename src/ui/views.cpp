@@ -88,11 +88,13 @@ static void cycle_timer_cb(lv_timer_t *t) {
     if (now - _last_cycle_time >= dwell) {
         _last_cycle_time = now;
         int next = (_active_index + 1) % 4;
-        // When wrapping back to MAP, step to next range level
-        if (next == VIEW_MAP) {
-            range_cycle();
-        }
+        if (next == VIEW_MAP) range_cycle();
+        // Update state directly — don't rely on VALUE_CHANGED callback
+        _active_index = next;
+        status_bar_set_active_dot(next);
+        if (next != VIEW_ARRIVALS) lv_obj_invalidate(tiles[next]);
         lv_tileview_set_tile_by_index(tileview, next, 0, LV_ANIM_OFF);
+        if (next == VIEW_ARRIVALS) arrivals_view_on_show();
     }
 }
 
@@ -145,6 +147,45 @@ int views_get_active_index() {
 
 lv_obj_t *views_get_tileview() {
     return tileview;
+}
+
+void views_switch_to(int idx) {
+    if (idx < 0 || idx > 3) return;
+    _active_index = idx;
+    status_bar_set_active_dot(idx);
+    if (idx != VIEW_ARRIVALS) lv_obj_invalidate(tiles[idx]);
+    lv_tileview_set_tile_by_index(tileview, idx, 0, LV_ANIM_OFF);
+    if (idx == VIEW_ARRIVALS) arrivals_view_on_show();
+    detail_card_hide();
+    alerts_dismiss();
+    views_pause_cycle();
+}
+
+static bool _swipe_active = false;
+static lv_point_t _swipe_start = {0, 0};
+#define SWIPE_THRESHOLD 50  // px horizontal travel to trigger view switch
+
+bool views_swipe_active() { return _swipe_active; }
+void views_clear_swipe()   { _swipe_active = false; }
+
+void views_attach_swipe(lv_obj_t *obj) {
+    lv_obj_add_event_cb(obj, [](lv_event_t *e) {
+        lv_indev_get_point(lv_indev_active(), &_swipe_start);
+        _swipe_active = false;
+    }, LV_EVENT_PRESSED, nullptr);
+
+    lv_obj_add_event_cb(obj, [](lv_event_t *e) {
+        if (_swipe_active) return;
+        lv_point_t cur;
+        lv_indev_get_point(lv_indev_active(), &cur);
+        int dx = cur.x - _swipe_start.x;
+        int dy = cur.y - _swipe_start.y;
+        if (abs(dx) >= SWIPE_THRESHOLD && abs(dx) > abs(dy) * 2) {
+            _swipe_active = true;
+            int v = views_get_active_index();
+            views_switch_to((dx < 0) ? (v + 1) % 4 : (v + 3) % 4);
+        }
+    }, LV_EVENT_PRESSING, nullptr);
 }
 
 void views_pause_cycle() {
