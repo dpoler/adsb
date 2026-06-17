@@ -122,7 +122,7 @@ void alerts_init(lv_obj_t *parent) {
     lv_obj_set_style_text_color(_toast_detail, lv_color_hex(0xaaaaaa), 0);
     lv_obj_align(_toast_detail, LV_ALIGN_LEFT_MID, 32, 10);
 
-    // Tap: switch to map, center on aircraft, track it, show detail card, dismiss
+    // Tap: switch to map, track aircraft, show detail card, dismiss
     lv_obj_add_event_cb(_toast, [](lv_event_t *e) {
         if (_current_hex[0] && aircraft_list.lock(pdMS_TO_TICKS(10))) {
             for (int i = 0; i < aircraft_list.count; i++) {
@@ -131,7 +131,6 @@ void alerts_init(lv_obj_t *parent) {
                     aircraft_list.unlock();
                     views_pause_cycle();
                     lv_tileview_set_tile_by_index(views_get_tileview(), VIEW_MAP, 0, LV_ANIM_OFF);
-                    map_view_center_on(ac_copy.lat, ac_copy.lon);
                     map_view_track(ac_copy.icao_hex);
                     detail_card_show(&ac_copy);
                     dismiss_toast(nullptr);
@@ -158,23 +157,11 @@ void alerts_show(AlertType type, const char *title, const char *detail,
         _current_hex[0] = '\0';
     }
 
-    // Military/emergency alerts: 10s timeout, optionally auto-focus on map
+    // Military/emergency alerts: 10s timeout, optionally switch to map view
     if (type == ALERT_MILITARY || type == ALERT_EMERGENCY) {
         timeout_ms = 10000;
 
         if (g_config.alert_autofocus) {
-            // Switch to map view, center on aircraft, and track it
-            if (_current_hex[0] && aircraft_list.lock(pdMS_TO_TICKS(10))) {
-                for (int i = 0; i < aircraft_list.count; i++) {
-                    if (strcmp(aircraft_list.aircraft[i].icao_hex, _current_hex) == 0) {
-                        map_view_center_on(aircraft_list.aircraft[i].lat,
-                                           aircraft_list.aircraft[i].lon);
-                        map_view_track(_current_hex);
-                        break;
-                    }
-                }
-                aircraft_list.unlock();
-            }
             views_pause_cycle();
             lv_tileview_set_tile_by_index(views_get_tileview(), VIEW_MAP, 0, LV_ANIM_OFF);
         }

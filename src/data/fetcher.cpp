@@ -104,10 +104,8 @@ static void mark_alerted(const char *hex) {
 // Check if ICAO hex is in known military ranges
 static bool check_military(const char *hex) {
     uint32_t h = strtoul(hex, nullptr, 16);
-    // US military (DoD, Army, Navy, USAF, Coast Guard)
+    // US military (DoD, Army, Navy, USAF)
     if (h >= 0xADF7C8 && h <= 0xAFFFFF) return true;
-    // US Coast Guard
-    if (h >= 0xA00001 && h <= 0xA00FFF) return true;
     // UK military (RAF, Royal Navy, Army Air Corps)
     if (h >= 0x43C000 && h <= 0x43CFFF) return true;
     // France military

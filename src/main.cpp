@@ -23,6 +23,7 @@
 #include "data/storage.h"
 #include "data/error_log.h"
 #include "data/enrichment.h"
+#include "ui/geo.h"
 
 // Global touch state — read by view timers to defer heavy rendering during interaction
 volatile bool touch_active = false;
@@ -170,9 +171,21 @@ void setup() {
         range_set_default(cfg->radius_nm);
     });
 
-    // Periodic status bar update
+    // Periodic status bar update — count only aircraft within current display range
     lv_timer_create([](lv_timer_t *timer) {
-        status_bar_update(fetcher_wifi_connected(), aircraft_list.count, fetcher_last_update());
+        float range = range_get_nm();
+        int visible = 0;
+        if (aircraft_list.lock(pdMS_TO_TICKS(5))) {
+            uint32_t now = millis();
+            for (int i = 0; i < aircraft_list.count; i++) {
+                Aircraft &ac = aircraft_list.aircraft[i];
+                if (compute_aircraft_opacity(ac.stale_since, now) == 0) continue;
+                if (MapProjection::distance_nm(HOME_LAT, HOME_LON, ac.lat, ac.lon) <= range)
+                    visible++;
+            }
+            aircraft_list.unlock();
+        }
+        status_bar_update(fetcher_wifi_connected(), visible, fetcher_last_update());
     }, 1000, nullptr);
 
     Serial.println("LVGL initialized - UI ready");
