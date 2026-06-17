@@ -25,6 +25,7 @@ static lv_obj_t *_range_label = nullptr;
 static MapProjection _proj;
 
 static bool _filter_just_clicked = false; // guard against zoom cycle
+static int _drawn_count = 0; // aircraft drawn in last frame, for status bar
 
 // Tracked aircraft — bold red circle until another is selected or it leaves
 static char _tracked_hex[7] = {};
@@ -429,6 +430,7 @@ static IconType classify_icon(const Aircraft &ac) {
 static void draw_aircraft(lv_layer_t *layer) {
     if (!_list->lock(pdMS_TO_TICKS(5))) return; // short timeout: skip frame if data locked
 
+    int drawn = 0;
     uint32_t now = millis();
     for (int i = 0; i < _list->count; i++) {
         Aircraft &ac = _list->aircraft[i];
@@ -438,6 +440,7 @@ static void draw_aircraft(lv_layer_t *layer) {
 
         int sx, sy;
         if (!_proj.to_screen(ac.lat, ac.lon, sx, sy)) continue;
+        drawn++;
 
         // Category color for the aircraft icon
         IconType icon = classify_icon(ac);
@@ -510,6 +513,7 @@ static void draw_aircraft(lv_layer_t *layer) {
         lv_draw_label(layer, &lbl_dsc, &lbl_area);
     }
 
+    _drawn_count = drawn;
     _list->unlock();
 }
 
@@ -817,6 +821,10 @@ void map_view_center_on(float lat, float lon) {
     _proj.center_lat = lat;
     _proj.center_lon = lon;
     if (_canvas) lv_obj_invalidate(_canvas);
+}
+
+int map_view_drawn_count() {
+    return _drawn_count;
 }
 
 void map_view_track(const char *icao_hex) {

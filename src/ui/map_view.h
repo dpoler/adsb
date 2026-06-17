@@ -11,3 +11,6 @@ void map_view_center_on(float lat, float lon);
 
 // Set which aircraft has the tracking circle (by ICAO hex, nullptr to clear)
 void map_view_track(const char *icao_hex);
+
+// Number of aircraft drawn in the last frame (matches what's visible on screen)
+int map_view_drawn_count();
