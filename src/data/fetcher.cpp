@@ -49,6 +49,8 @@ static void reset_wifi_c6() {
 // Attempt WiFi connection with timeout. Returns true if connected.
 static bool wifi_connect_with_timeout(uint32_t timeout_ms) {
     WiFi.mode(WIFI_STA);
+    WiFi.setScanMethod(WIFI_FAST_SCAN);
+    WiFi.setSortMethod(WIFI_CONNECT_AP_BY_SIGNAL);
     Serial.printf("WiFi connecting to '%s'...\n", g_config.wifi_ssid);
     WiFi.begin(g_config.wifi_ssid, g_config.wifi_pass);
 
@@ -67,6 +69,13 @@ static bool wifi_connect_with_timeout(uint32_t timeout_ms) {
         vTaskDelay(pdMS_TO_TICKS(500));
         Serial.print(".");
     }
+    // Wait for DHCP to assign an address (WL_CONNECTED fires before lease is granted)
+    uint32_t dhcp_start = millis();
+    while (WiFi.localIP() == IPAddress(0, 0, 0, 0) && millis() - dhcp_start < 5000)
+        vTaskDelay(pdMS_TO_TICKS(200));
+    uint8_t *bssid = WiFi.BSSID();
+    Serial.printf("\nConnected to BSSID %02x:%02x:%02x:%02x:%02x:%02x  RSSI %d dBm\n",
+        bssid[0], bssid[1], bssid[2], bssid[3], bssid[4], bssid[5], WiFi.RSSI());
     return true;
 }
 
@@ -349,12 +358,10 @@ static void fetch_task(void *param) {
     {
         int retries = 0;
         while (!network_connected()) {
-            if (retries > 0) {
-                if (retries % WIFI_MAX_RETRIES == 0) {
-                    Serial.printf("\nWiFi failed %d times, hard-resetting C6\n", retries);
-                    error_log_add("WiFi stuck, C6 reset #%d", retries / WIFI_MAX_RETRIES);
-                    reset_wifi_c6();
-                }
+            if (retries > 0 && retries % WIFI_MAX_RETRIES == 0) {
+                Serial.printf("\nWiFi failed %d times, hard-resetting C6\n", retries);
+                error_log_add("WiFi stuck, C6 reset #%d", retries / WIFI_MAX_RETRIES);
+                reset_wifi_c6();
             }
             Serial.printf("Fetcher: WiFi attempt %d\n", retries + 1);
             if (wifi_connect_with_timeout(WIFI_CONNECT_TIMEOUT_MS)) break;

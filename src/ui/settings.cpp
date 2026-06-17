@@ -124,8 +124,10 @@ static void save_and_close(lv_event_t *e) {
     // Read values from text areas
     strncpy(_cfg.wifi_ssid, lv_textarea_get_text(_ta_ssid), sizeof(_cfg.wifi_ssid) - 1);
     _cfg.wifi_ssid[sizeof(_cfg.wifi_ssid) - 1] = '\0';
+    for (char *p = _cfg.wifi_ssid; *p; p++) if (*p == '\r' || *p == '\n') *p = '\0';
     strncpy(_cfg.wifi_pass, lv_textarea_get_text(_ta_pass), sizeof(_cfg.wifi_pass) - 1);
     _cfg.wifi_pass[sizeof(_cfg.wifi_pass) - 1] = '\0';
+    for (char *p = _cfg.wifi_pass; *p; p++) if (*p == '\r' || *p == '\n') *p = '\0';
     _cfg.home_lat = atof(lv_textarea_get_text(_ta_lat));
     _cfg.home_lon = atof(lv_textarea_get_text(_ta_lon));
     // _cfg.radius_nm already updated live by radius_btn_select on button press
