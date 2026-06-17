@@ -8,6 +8,7 @@
 #include "../pins_config.h"
 #include "../data/fetcher.h"
 #include "../data/error_log.h"
+#include "../config.h"
 
 #define STATS_W LCD_H_RES
 #define STATS_H (LCD_V_RES - 30)
@@ -570,8 +571,8 @@ void stats_view_init(lv_obj_t *parent, AircraftList *list) {
         }
     }, 33, nullptr);
 
-    // Refresh timer
-    lv_timer_create(refresh_stats, 2000, nullptr);
+    // Refresh timer — match fetch interval so we don't recount stale data
+    lv_timer_create(refresh_stats, ADSB_POLL_INTERVAL_MS, nullptr);
 }
 
 void stats_view_update() {

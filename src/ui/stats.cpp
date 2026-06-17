@@ -176,9 +176,12 @@ void stats_update(AircraftList *list) {
         if (ac.lat == 0 && ac.lon == 0) continue;
 
         _stats.current_count++;
+        bool is_new = !already_seen(ac.icao_hex);
         mark_seen(ac.icao_hex);
-        track_type(ac.type_code);
-        track_airline(ac.callsign);
+        if (is_new) {
+            track_type(ac.type_code);
+            track_airline(ac.callsign);
+        }
 
         // Speed distribution
         if (ac.on_ground) _stats.spd_gnd++;
