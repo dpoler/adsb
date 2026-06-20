@@ -144,6 +144,7 @@ void setup() {
     Serial.println("Status bar OK");
 
     Serial.println("views_init...");
+    range_set_levels(g_config.radius_presets, 4);
     range_set_default(g_config.radius_nm);
     views_init(screen, &aircraft_list);
     Serial.println("views OK");
@@ -166,9 +167,11 @@ void setup() {
 
     bool first_boot = (g_config.wifi_ssid[0] == '\0');
     settings_set_change_callback([](const UserConfig *cfg) {
-        bool radius_changed = (cfg->radius_nm != g_config.radius_nm);
+        bool presets_changed = (memcmp(cfg->radius_presets, g_config.radius_presets,
+                                       sizeof(g_config.radius_presets)) != 0);
         g_config = *cfg;
-        if (radius_changed) range_set_default(cfg->radius_nm);
+        range_set_levels(cfg->radius_presets, 4);
+        if (presets_changed) range_set_default(cfg->radius_nm);
         map_view_center_on(cfg->home_lat, cfg->home_lon);
         radar_view_set_home(cfg->home_lat, cfg->home_lon);
     });

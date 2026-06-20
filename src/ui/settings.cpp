@@ -16,8 +16,7 @@ static lv_obj_t *_ta_lat = nullptr;
 static lv_obj_t *_ta_lon = nullptr;
 
 // Controls
-static lv_obj_t *_radius_btns[3] = {nullptr, nullptr, nullptr};
-static const int _radius_values[] = {5, 20, 50};
+static lv_obj_t *_ta_radius[4] = {nullptr, nullptr, nullptr, nullptr};
 static lv_obj_t *_sw_metric = nullptr;
 static lv_obj_t *_sw_ethernet = nullptr;
 static lv_obj_t *_btn_show_pass = nullptr;
@@ -100,25 +99,6 @@ static lv_obj_t *create_switch(lv_obj_t *parent, int x, int y, bool checked) {
     return sw;
 }
 
-static void radius_btn_select(int nm) {
-    // Snap to nearest valid value
-    int best = _radius_values[2]; // default 50
-    int best_diff = 9999;
-    for (int i = 0; i < 3; i++) {
-        int diff = abs(_radius_values[i] - nm);
-        if (diff < best_diff) { best_diff = diff; best = _radius_values[i]; }
-    }
-    _cfg.radius_nm = best;
-    for (int i = 0; i < 3; i++) {
-        bool active = (_radius_values[i] == best);
-        lv_obj_set_style_bg_color(_radius_btns[i],
-            active ? ACCENT_COLOR : lv_color_hex(0x1a1a3a), 0);
-        lv_obj_t *lbl = lv_obj_get_child(_radius_btns[i], 0);
-        lv_obj_set_style_text_color(lbl,
-            active ? lv_color_black() : lv_color_hex(0x8888aa), 0);
-    }
-}
-
 static void save_and_close(lv_event_t *e) {
     bool old_use_ethernet = _cfg.use_ethernet;
 
@@ -131,7 +111,21 @@ static void save_and_close(lv_event_t *e) {
     for (char *p = _cfg.wifi_pass; *p; p++) if (*p == '\r' || *p == '\n') *p = '\0';
     _cfg.home_lat = atof(lv_textarea_get_text(_ta_lat));
     _cfg.home_lon = atof(lv_textarea_get_text(_ta_lon));
-    // _cfg.radius_nm already updated live by radius_btn_select on button press
+    for (int i = 0; i < 4; i++) {
+        int v = atoi(lv_textarea_get_text(_ta_radius[i]));
+        if (v < 1) v = 1;
+        if (v > 500) v = 500;
+        _cfg.radius_presets[i] = v;
+    }
+    // Sort ascending so range module receives them in order
+    for (int i = 0; i < 3; i++)
+        for (int j = i + 1; j < 4; j++)
+            if (_cfg.radius_presets[i] > _cfg.radius_presets[j]) {
+                int tmp = _cfg.radius_presets[i];
+                _cfg.radius_presets[i] = _cfg.radius_presets[j];
+                _cfg.radius_presets[j] = tmp;
+            }
+    _cfg.radius_nm = _cfg.radius_presets[3]; // max preset = API query radius
     _cfg.use_metric = lv_obj_has_state(_sw_metric, LV_STATE_CHECKED);
     _cfg.use_ethernet = lv_obj_has_state(_sw_ethernet, LV_STATE_CHECKED);
     _cfg.alert_military = lv_obj_has_state(_sw_alert_mil, LV_STATE_CHECKED);
@@ -225,30 +219,24 @@ void settings_init(lv_obj_t *parent) {
         lv_label_set_text(lbl, pw ? LV_SYMBOL_EYE_CLOSE : LV_SYMBOL_EYE_OPEN);
     }, LV_EVENT_CLICKED, nullptr);
 
-    // Default Radius — radio buttons: 5nm / 20nm / 50nm
-    create_label(_panel, "Default Radius", 0, 158);
-    static const char *radius_btn_labels[] = {"5nm", "20nm", "50nm"};
-    for (int i = 0; i < 3; i++) {
-        _radius_btns[i] = lv_obj_create(_panel);
-        lv_obj_set_size(_radius_btns[i], 60, 30);
-        lv_obj_set_pos(_radius_btns[i], i * 68, 178);
-        lv_obj_set_style_bg_color(_radius_btns[i], lv_color_hex(0x1a1a3a), 0);
-        lv_obj_set_style_bg_opa(_radius_btns[i], LV_OPA_COVER, 0);
-        lv_obj_set_style_border_color(_radius_btns[i], lv_color_hex(0x333366), 0);
-        lv_obj_set_style_border_width(_radius_btns[i], 1, 0);
-        lv_obj_set_style_radius(_radius_btns[i], 6, 0);
-        lv_obj_set_style_pad_all(_radius_btns[i], 0, 0);
-        lv_obj_clear_flag(_radius_btns[i], LV_OBJ_FLAG_SCROLLABLE);
-        lv_obj_t *lbl = lv_label_create(_radius_btns[i]);
-        lv_label_set_text(lbl, radius_btn_labels[i]);
-        lv_obj_set_style_text_font(lbl, &lv_font_montserrat_14, 0);
-        lv_obj_set_style_text_color(lbl, lv_color_hex(0x8888aa), 0);
-        lv_obj_center(lbl);
-        lv_obj_add_event_cb(_radius_btns[i], [](lv_event_t *e) {
-            radius_btn_select(_radius_values[(int)(intptr_t)lv_event_get_user_data(e)]);
-        }, LV_EVENT_CLICKED, (void *)(intptr_t)i);
+    // Range Presets — 4 configurable text fields (nm, 1-500)
+    create_label(_panel, "Range Presets (nm, 1-500)", 0, 158);
+    for (int i = 0; i < 4; i++) {
+        char rbuf[8];
+        snprintf(rbuf, sizeof(rbuf), "%d", _cfg.radius_presets[i]);
+        _ta_radius[i] = lv_textarea_create(_panel);
+        lv_obj_set_size(_ta_radius[i], 60, 36);
+        lv_obj_set_pos(_ta_radius[i], i * 66, 178);
+        lv_textarea_set_one_line(_ta_radius[i], true);
+        lv_textarea_set_text(_ta_radius[i], rbuf);
+        lv_obj_set_style_bg_color(_ta_radius[i], lv_color_hex(0x1a1a3a), 0);
+        lv_obj_set_style_text_color(_ta_radius[i], lv_color_white(), 0);
+        lv_obj_set_style_text_font(_ta_radius[i], &lv_font_montserrat_14, 0);
+        lv_obj_set_style_border_color(_ta_radius[i], lv_color_hex(0x333366), 0);
+        lv_obj_set_style_border_width(_ta_radius[i], 1, 0);
+        lv_obj_set_style_border_color(_ta_radius[i], ACCENT_COLOR, LV_STATE_FOCUSED);
+        lv_obj_add_event_cb(_ta_radius[i], ta_focus_cb, LV_EVENT_FOCUSED, nullptr);
     }
-    radius_btn_select(_cfg.radius_nm);
 
     // Metric
     create_label(_panel, "Metric Units", 0, 222);
@@ -382,7 +370,11 @@ void settings_show() {
     lv_textarea_set_text(_ta_lat, lat_str);
     lv_textarea_set_text(_ta_lon, lon_str);
 
-    radius_btn_select(_cfg.radius_nm);
+    for (int i = 0; i < 4; i++) {
+        char rbuf[8];
+        snprintf(rbuf, sizeof(rbuf), "%d", _cfg.radius_presets[i]);
+        lv_textarea_set_text(_ta_radius[i], rbuf);
+    }
 
     if (_cfg.use_metric) lv_obj_add_state(_sw_metric, LV_STATE_CHECKED);
     else lv_obj_clear_state(_sw_metric, LV_STATE_CHECKED);

@@ -14,6 +14,10 @@ UserConfig storage_load_config() {
     cfg.home_lat = 0.0f;
     cfg.home_lon = 0.0f;
     cfg.radius_nm = 50;
+    cfg.radius_presets[0] = 5;
+    cfg.radius_presets[1] = 10;
+    cfg.radius_presets[2] = 20;
+    cfg.radius_presets[3] = 50;
     cfg.use_metric = false;
     cfg.use_ethernet = false; // WiFi by default
     cfg.watchlist_count = 0;
@@ -41,6 +45,10 @@ UserConfig storage_load_config() {
     cfg.home_lat = _prefs.getFloat("lat", cfg.home_lat);
     cfg.home_lon = _prefs.getFloat("lon", cfg.home_lon);
     cfg.radius_nm = _prefs.getInt("radius", cfg.radius_nm);
+    cfg.radius_presets[0] = _prefs.getInt("rad0", cfg.radius_presets[0]);
+    cfg.radius_presets[1] = _prefs.getInt("rad1", cfg.radius_presets[1]);
+    cfg.radius_presets[2] = _prefs.getInt("rad2", cfg.radius_presets[2]);
+    cfg.radius_presets[3] = _prefs.getInt("rad3", cfg.radius_presets[3]);
     cfg.use_metric = _prefs.getBool("metric", cfg.use_metric);
     cfg.use_ethernet = _prefs.getBool("use_eth", cfg.use_ethernet);
     cfg.alert_military = _prefs.getBool("alrt_mil", cfg.alert_military);
@@ -70,6 +78,10 @@ void storage_save_config(const UserConfig &cfg) {
     _prefs.putFloat("lat", cfg.home_lat);
     _prefs.putFloat("lon", cfg.home_lon);
     _prefs.putInt("radius", cfg.radius_nm);
+    _prefs.putInt("rad0", cfg.radius_presets[0]);
+    _prefs.putInt("rad1", cfg.radius_presets[1]);
+    _prefs.putInt("rad2", cfg.radius_presets[2]);
+    _prefs.putInt("rad3", cfg.radius_presets[3]);
     _prefs.putBool("metric", cfg.use_metric);
     _prefs.putBool("use_eth", cfg.use_ethernet);
     _prefs.putBool("alrt_mil", cfg.alert_military);

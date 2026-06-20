@@ -221,46 +221,6 @@ static void filter_click_cb(lv_event_t *e) {
     update_filter_visuals();
 }
 
-static void draw_grid(lv_layer_t *layer) {
-    float radius_nm = range_get_nm();
-    float cos_lat = cosf(_proj.center_lat * M_PI / 180.0f);
-
-    float grid_deg = radius_nm >= 30 ? 1.0f : (radius_nm >= 10 ? 0.5f : 0.1f);
-
-    float half_h_nm = radius_nm;
-    float half_w_nm = radius_nm * (float)CANVAS_W / (float)CANVAS_H;
-    float north = _proj.center_lat + half_h_nm / 60.0f;
-    float south = _proj.center_lat - half_h_nm / 60.0f;
-    float east = _proj.center_lon + half_w_nm / (60.0f * cos_lat);
-    float west = _proj.center_lon - half_w_nm / (60.0f * cos_lat);
-
-    lv_draw_line_dsc_t line_dsc;
-    lv_draw_line_dsc_init(&line_dsc);
-    line_dsc.color = lv_color_hex(0x0d1a2a);
-    line_dsc.width = 1;
-    line_dsc.opa = LV_OPA_COVER;
-
-    float lon_start = floorf(west / grid_deg) * grid_deg;
-    for (float lon = lon_start; lon <= east; lon += grid_deg) {
-        int x1, y1, x2, y2;
-        _proj.to_screen(north, lon, x1, y1);
-        _proj.to_screen(south, lon, x2, y2);
-        line_dsc.p1 = {(lv_value_precise_t)x1, (lv_value_precise_t)y1};
-        line_dsc.p2 = {(lv_value_precise_t)x2, (lv_value_precise_t)y2};
-        lv_draw_line(layer, &line_dsc);
-    }
-
-    float lat_start = floorf(south / grid_deg) * grid_deg;
-    for (float lat = lat_start; lat <= north; lat += grid_deg) {
-        int x1, y1, x2, y2;
-        _proj.to_screen(lat, west, x1, y1);
-        _proj.to_screen(lat, east, x2, y2);
-        line_dsc.p1 = {(lv_value_precise_t)x1, (lv_value_precise_t)y1};
-        line_dsc.p2 = {(lv_value_precise_t)x2, (lv_value_precise_t)y2};
-        lv_draw_line(layer, &line_dsc);
-    }
-}
-
 static void draw_range_rings(lv_layer_t *layer) {
     lv_draw_arc_dsc_t arc_dsc;
     lv_draw_arc_dsc_init(&arc_dsc);
@@ -655,7 +615,6 @@ static void canvas_draw_cb(lv_event_t *e) {
 #if HAS_STATIC_MAP
     draw_static_background(layer);
 #endif
-    draw_grid(layer);
     draw_range_rings(layer);
     draw_home_marker(layer);
     draw_aircraft(layer);
