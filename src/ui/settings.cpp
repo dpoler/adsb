@@ -37,9 +37,9 @@ static UserConfig _cfg;
 // Callback for config changes (set by main)
 static settings_changed_cb_t _on_change = nullptr;
 
-#define PANEL_W 500
+#define PANEL_W 820
 #define PANEL_H (LCD_V_RES - 40)
-#define FIELD_W 200
+#define FIELD_W 240
 #define LABEL_COLOR lv_color_hex(0x8888aa)
 #define BG_COLOR lv_color_hex(0x12122a)
 #define ACCENT_COLOR lv_color_hex(0x00cc66)
@@ -251,30 +251,30 @@ void settings_init(lv_obj_t *parent) {
     radius_btn_select(_cfg.radius_nm);
 
     // Metric
-    create_label(_panel, "Metric Units", 0, 202);
-    _sw_metric = create_switch(_panel, 110, 200, _cfg.use_metric);
+    create_label(_panel, "Metric Units", 0, 222);
+    _sw_metric = create_switch(_panel, 110, 220, _cfg.use_metric);
 
     // Network mode (Ethernet toggle — off=WiFi, on=Ethernet)
-    create_label(_panel, "Ethernet", 0, 236);
-    _sw_ethernet = create_switch(_panel, 110, 234, _cfg.use_ethernet);
+    create_label(_panel, "Ethernet", 0, 258);
+    _sw_ethernet = create_switch(_panel, 110, 256, _cfg.use_ethernet);
     lv_obj_t *net_hint = lv_label_create(_panel);
     lv_label_set_text(net_hint, "(reboot)");
     lv_obj_set_style_text_color(net_hint, lv_color_hex(0x666688), 0);
     lv_obj_set_style_text_font(net_hint, &lv_font_montserrat_14, 0);
-    lv_obj_set_pos(net_hint, 160, 238);
+    lv_obj_set_pos(net_hint, 164, 260);
 
     // Alert toggles
-    create_label(_panel, "Mil Alerts", 0, 268);
-    _sw_alert_mil = create_switch(_panel, 110, 266, _cfg.alert_military);
+    create_label(_panel, "Mil Alerts", 0, 292);
+    _sw_alert_mil = create_switch(_panel, 110, 290, _cfg.alert_military);
 
-    create_label(_panel, "Emg Alerts", 0, 300);
-    _sw_alert_emg = create_switch(_panel, 110, 298, _cfg.alert_emergency);
+    create_label(_panel, "Emg Alerts", 0, 326);
+    _sw_alert_emg = create_switch(_panel, 110, 324, _cfg.alert_emergency);
 
-    create_label(_panel, "Alert Focus", 0, 332);
-    _sw_autofocus = create_switch(_panel, 110, 330, _cfg.alert_autofocus);
+    create_label(_panel, "Alert Focus", 0, 360);
+    _sw_autofocus = create_switch(_panel, 110, 358, _cfg.alert_autofocus);
 
-    // === RIGHT SIDE (x=240) ===
-    int rx = 240;
+    // === RIGHT SIDE (x=420) ===
+    int rx = 420;
 
     // Location
     char lat_str[16], lon_str[16];
@@ -293,7 +293,7 @@ void settings_init(lv_obj_t *parent) {
 
     create_label(_panel, "Trail Length", rx, 190);
     _slider_trail_len = lv_slider_create(_panel);
-    lv_obj_set_size(_slider_trail_len, 150, 10);
+    lv_obj_set_size(_slider_trail_len, 180, 10);
     lv_obj_set_pos(_slider_trail_len, rx, 210);
     lv_slider_set_range(_slider_trail_len, 10, 60);
     lv_slider_set_value(_slider_trail_len, _cfg.trail_max_points, LV_ANIM_OFF);
@@ -305,7 +305,7 @@ void settings_init(lv_obj_t *parent) {
     lv_label_set_text_fmt(_trail_len_label, "%d pts", _cfg.trail_max_points);
     lv_obj_set_style_text_color(_trail_len_label, lv_color_white(), 0);
     lv_obj_set_style_text_font(_trail_len_label, &lv_font_montserrat_14, 0);
-    lv_obj_set_pos(_trail_len_label, rx + 160, 206);
+    lv_obj_set_pos(_trail_len_label, rx + 190, 206);
 
     lv_obj_add_event_cb(_slider_trail_len, [](lv_event_t *e) {
         int val = lv_slider_get_value(lv_event_get_target_obj(e));
@@ -318,7 +318,7 @@ void settings_init(lv_obj_t *parent) {
 
     create_label(_panel, "Cycle Interval", rx, 270);
     _slider_cycle_int = lv_slider_create(_panel);
-    lv_obj_set_size(_slider_cycle_int, 150, 10);
+    lv_obj_set_size(_slider_cycle_int, 180, 10);
     lv_obj_set_pos(_slider_cycle_int, rx, 290);
     lv_slider_set_range(_slider_cycle_int, 15, 120);
     lv_slider_set_value(_slider_cycle_int, _cfg.cycle_interval_s, LV_ANIM_OFF);
@@ -330,7 +330,7 @@ void settings_init(lv_obj_t *parent) {
     lv_label_set_text_fmt(_cycle_int_label, "%ds", _cfg.cycle_interval_s);
     lv_obj_set_style_text_color(_cycle_int_label, lv_color_white(), 0);
     lv_obj_set_style_text_font(_cycle_int_label, &lv_font_montserrat_14, 0);
-    lv_obj_set_pos(_cycle_int_label, rx + 160, 286);
+    lv_obj_set_pos(_cycle_int_label, rx + 190, 286);
 
     lv_obj_add_event_cb(_slider_cycle_int, [](lv_event_t *e) {
         int val = lv_slider_get_value(lv_event_get_target_obj(e));
