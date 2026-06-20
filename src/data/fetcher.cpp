@@ -1,7 +1,6 @@
 #include "fetcher.h"
 #include "error_log.h"
 #include "http_mutex.h"
-#include "../config.h"
 #include "../pins_config.h"
 #include "../data/storage.h"
 #include "../ui/alerts.h"
@@ -375,7 +374,7 @@ static void fetch_task(void *param) {
     // Build API URL
     char url[128];
     snprintf(url, sizeof(url), "https://api.adsb.lol/v2/point/%.4f/%.4f/%d",
-             HOME_LAT, HOME_LON, ADSB_RADIUS_NM);
+             g_config.home_lat, g_config.home_lon, g_config.radius_nm);
     Serial.printf("ADS-B API URL: %s\n", url);
 
     // Main fetch loop
@@ -474,7 +473,7 @@ static void fetch_task(void *param) {
             }
         }
 
-        vTaskDelay(pdMS_TO_TICKS(ADSB_POLL_INTERVAL_MS));
+        vTaskDelay(pdMS_TO_TICKS(20000));
     }
 }
 

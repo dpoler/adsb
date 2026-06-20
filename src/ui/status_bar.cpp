@@ -1,7 +1,6 @@
 #include <Arduino.h>
 #include "status_bar.h"
 #include "views.h"
-#include "../config.h"
 #include "../pins_config.h"
 #include "../data/fetcher.h"
 

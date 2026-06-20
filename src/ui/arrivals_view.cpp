@@ -2,7 +2,6 @@
 #include "arrivals_view.h"
 #include "views.h"
 #include "detail_card.h"
-#include "../config.h"
 #include "../pins_config.h"
 #include "geo.h"
 #include <cstring>
@@ -173,7 +172,7 @@ static void update_board(lv_timer_t *t) {
         Aircraft &ac = _list->aircraft[i];
         if (ac.lat == 0 && ac.lon == 0) continue;
         if (g_config.hide_ground && ac.on_ground) continue;
-        float d = MapProjection::distance_nm(HOME_LAT, HOME_LON, ac.lat, ac.lon);
+        float d = MapProjection::distance_nm(g_config.home_lat, g_config.home_lon, ac.lat, ac.lon);
         if (d > range_get_nm()) continue;
         entries[n_entries].index = i;
         entries[n_entries].dist_nm = d;

@@ -3,7 +3,6 @@
 #include "views.h"
 #include "detail_card.h"
 #include "filters.h"
-#include "../config.h"
 #include "../pins_config.h"
 #include "../data/storage.h"
 #include "geo.h"
@@ -404,8 +403,8 @@ static void radar_filter_click_cb(lv_event_t *e) {
 void radar_view_init(lv_obj_t *parent, AircraftList *list) {
     _list = list;
 
-    _proj.center_lat = HOME_LAT;
-    _proj.center_lon = HOME_LON;
+    _proj.center_lat = g_config.home_lat;
+    _proj.center_lon = g_config.home_lon;
     _proj.radius_nm = range_get_nm();
 
     _radar_obj = lv_obj_create(parent);

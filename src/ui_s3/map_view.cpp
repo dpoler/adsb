@@ -4,7 +4,7 @@
 #include "views.h"
 #include "../ui/range.h"
 #include "../ui/filters.h"
-#include "../config.h"
+
 #include "../pins_s3.h"
 #include "../data/storage.h"
 #include "../data/fetcher.h"
@@ -244,7 +244,7 @@ static void draw_range_rings(lv_layer_t *layer) {
 
 static void draw_home_marker(lv_layer_t *layer) {
     int hx, hy;
-    if (!_proj.to_screen(HOME_LAT, HOME_LON, hx, hy)) return;
+    if (!_proj.to_screen(g_config.home_lat, g_config.home_lon, hx, hy)) return;
     lv_draw_line_dsc_t line_dsc;
     lv_draw_line_dsc_init(&line_dsc);
     line_dsc.color = lv_color_hex(0x4488ff);
@@ -449,8 +449,8 @@ static void canvas_draw_cb(lv_event_t *e) {
 void map_view_init(lv_obj_t *parent, AircraftList *list) {
     _list = list;
 
-    _proj.center_lat = HOME_LAT;
-    _proj.center_lon = HOME_LON;
+    _proj.center_lat = g_config.home_lat;
+    _proj.center_lon = g_config.home_lon;
     _proj.radius_nm = range_get_nm();
     _proj.screen_w = CANVAS_W;
     _proj.screen_h = CANVAS_H;

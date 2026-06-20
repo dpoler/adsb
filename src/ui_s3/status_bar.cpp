@@ -1,7 +1,7 @@
 #include <Arduino.h>
 #include "status_bar.h"
 #include "views.h"
-#include "../config.h"
+
 #include "../pins_s3.h"
 #include "../data/fetcher.h"
 

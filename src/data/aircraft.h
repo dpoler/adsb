@@ -4,7 +4,9 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "esp_heap_caps.h"
-#include "../config.h"
+
+#define MAX_AIRCRAFT 200
+#define TRAIL_LENGTH 60
 
 struct TrailPoint {
     float lat;
@@ -42,7 +44,7 @@ struct Aircraft {
     float nav_qnh;          // altimeter setting hPa (0 = n/a)
     uint32_t last_seen;     // millis() timestamp
     uint32_t stale_since;   // 0 = fresh, else millis() when first went stale
-    TrailPoint trail[60];
+    TrailPoint trail[TRAIL_LENGTH];
     uint8_t trail_count;
 
     void clear() {

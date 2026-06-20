@@ -3,7 +3,7 @@
 #include "driver/i2c_master.h"
 #include "esp_heap_caps.h"
 #include "pins.h"
-#include "../config.h"
+
 #include "rgb_lcd.h"
 #include "../hal/gt911_touch.h"
 #include "../data/aircraft.h"

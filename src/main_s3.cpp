@@ -3,7 +3,7 @@
 #include <TFT_eSPI.h>
 #include "esp_heap_caps.h"
 #include "pins_s3.h"
-#include "config.h"
+
 #include "data/aircraft.h"
 #include "data/fetcher.h"
 #include "data/storage.h"

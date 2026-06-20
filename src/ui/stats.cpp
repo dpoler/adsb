@@ -1,7 +1,7 @@
 #include <Arduino.h>
 #include "stats.h"
 #include "geo.h"
-#include "../config.h"
+#include "../data/storage.h"
 #include <cstring>
 #include <cstdlib>
 
@@ -241,7 +241,7 @@ void stats_update(AircraftList *list) {
             }
         }
 
-        float d = MapProjection::distance_nm(HOME_LAT, HOME_LON, ac.lat, ac.lon);
+        float d = MapProjection::distance_nm(g_config.home_lat, g_config.home_lon, ac.lat, ac.lon);
         if (d < _stats.closest_dist) {
             _stats.closest_dist = d;
             strlcpy(_stats.closest_callsign,

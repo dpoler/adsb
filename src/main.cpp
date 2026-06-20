@@ -5,7 +5,6 @@
 #include "esp_lcd_mipi_dsi.h"
 #include "esp_heap_caps.h"
 #include "pins_config.h"
-#include "config.h"
 #include "hal/jd9165_lcd.h"
 #include "hal/gt911_touch.h"
 #include "data/aircraft.h"
@@ -165,10 +164,16 @@ void setup() {
         settings_show();
     });
 
+    bool first_boot = (g_config.wifi_ssid[0] == '\0');
     settings_set_change_callback([](const UserConfig *cfg) {
         g_config = *cfg;
         range_set_default(cfg->radius_nm);
     });
+
+    // On first boot (no credentials in NVS), open settings automatically
+    if (first_boot) {
+        settings_show();
+    }
 
     // Periodic status bar update — count matches what's drawn on the map
     lv_timer_create([](lv_timer_t *timer) {

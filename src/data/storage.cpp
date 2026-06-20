@@ -1,5 +1,4 @@
 #include "storage.h"
-#include "../config.h"
 #include <Preferences.h>
 #include <cstring>
 
@@ -9,14 +8,12 @@ static Preferences _prefs;
 UserConfig storage_load_config() {
     UserConfig cfg;
 
-    // Compiled defaults
-    strncpy(cfg.wifi_ssid, WIFI_SSID, sizeof(cfg.wifi_ssid) - 1);
-    cfg.wifi_ssid[sizeof(cfg.wifi_ssid) - 1] = '\0';
-    strncpy(cfg.wifi_pass, WIFI_PASS, sizeof(cfg.wifi_pass) - 1);
-    cfg.wifi_pass[sizeof(cfg.wifi_pass) - 1] = '\0';
-    cfg.home_lat = HOME_LAT;
-    cfg.home_lon = HOME_LON;
-    cfg.radius_nm = ADSB_RADIUS_NM;
+    // Compiled defaults — credentials and location are blank until set via settings
+    cfg.wifi_ssid[0] = '\0';
+    cfg.wifi_pass[0] = '\0';
+    cfg.home_lat = 0.0f;
+    cfg.home_lon = 0.0f;
+    cfg.radius_nm = 50;
     cfg.use_metric = false;
     cfg.use_ethernet = false; // WiFi by default
     cfg.watchlist_count = 0;

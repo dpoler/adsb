@@ -1,7 +1,8 @@
 #include <Arduino.h>
 #include "detail_card.h"
 #include "../ui/geo.h"
-#include "../config.h"
+#include "../data/storage.h"
+
 #include "../data/enrichment.h"
 #include "../pins_s3.h"
 
@@ -267,13 +268,13 @@ void detail_card_show(const Aircraft *ac) {
     lv_label_set_text(_status_label, status);
 
     // Row 3: DIST / BRG / SIGNAL
-    float dist = MapProjection::distance_nm(HOME_LAT, HOME_LON, ac->lat, ac->lon);
+    float dist = MapProjection::distance_nm(g_config.home_lat, g_config.home_lon, ac->lat, ac->lon);
     lv_label_set_text_fmt(_dist_label, "%.1fnm", dist);
 
-    float dlon = (ac->lon - HOME_LON) * M_PI / 180.0f;
+    float dlon = (ac->lon - g_config.home_lon) * M_PI / 180.0f;
     float y = sinf(dlon) * cosf(ac->lat * M_PI / 180.0f);
-    float x = cosf(HOME_LAT * M_PI / 180.0f) * sinf(ac->lat * M_PI / 180.0f) -
-              sinf(HOME_LAT * M_PI / 180.0f) * cosf(ac->lat * M_PI / 180.0f) * cosf(dlon);
+    float x = cosf(g_config.home_lat * M_PI / 180.0f) * sinf(ac->lat * M_PI / 180.0f) -
+              sinf(g_config.home_lat * M_PI / 180.0f) * cosf(ac->lat * M_PI / 180.0f) * cosf(dlon);
     int bearing = (int)(atan2f(y, x) * 180.0f / M_PI + 360.0f) % 360;
     lv_label_set_text_fmt(_bearing_label, "%03d", bearing);
 
