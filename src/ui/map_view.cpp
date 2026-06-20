@@ -776,6 +776,15 @@ void map_view_update() {
     if (_canvas) lv_obj_invalidate(_canvas);
 }
 
+void map_view_on_show() {
+    float r = range_get_nm();
+    if (r != _proj.radius_nm) {
+        _proj.radius_nm = r;
+        if (_range_label) lv_label_set_text(_range_label, range_label());
+    }
+    if (_canvas) lv_obj_invalidate(_canvas);
+}
+
 void map_view_center_on(float lat, float lon) {
     _proj.center_lat = lat;
     _proj.center_lon = lon;

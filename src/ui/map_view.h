@@ -5,6 +5,7 @@
 
 void map_view_init(lv_obj_t *parent, AircraftList *list);
 void map_view_update();
+void map_view_on_show();
 
 // Center the map on a specific lat/lon and redraw
 void map_view_center_on(float lat, float lon);

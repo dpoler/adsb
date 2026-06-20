@@ -7,12 +7,12 @@
 static lv_obj_t *wifi_icon;
 static lv_obj_t *ac_count_label;
 static lv_obj_t *update_label;
-static lv_obj_t *nav_btns[4];
-static lv_obj_t *nav_labels[4];
+static lv_obj_t *nav_btns[5];
+static lv_obj_t *nav_labels[5];
 static lv_obj_t *gear_icon;
 static lv_obj_t *auto_label;
 
-static const char *NAV_NAMES[] = {"MAP", "RADAR", "ARR", "STATS"};
+static const char *NAV_NAMES[] = {"MAP", "RADAR", "ARR", "STATS", "APRT"};
 
 #define STATUS_BAR_HEIGHT 30
 #define STATUS_BG_COLOR lv_color_hex(0x0d0d1a)
@@ -45,9 +45,9 @@ lv_obj_t *status_bar_create(lv_obj_t *parent) {
     lv_obj_align(ac_count_label, LV_ALIGN_LEFT_MID, 42, 0);
 
     // Nav buttons (center)
-    int nav_total_w = 4 * 60 + 3 * 6; // 4 buttons, 6px gaps
+    int nav_total_w = 5 * 60 + 4 * 6; // 5 buttons, 6px gaps
     int nav_x0 = (LCD_H_RES - nav_total_w) / 2;
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < 5; i++) {
         nav_btns[i] = lv_obj_create(bar);
         lv_obj_set_size(nav_btns[i], 60, 24);
         lv_obj_set_pos(nav_btns[i], nav_x0 + i * 66, 3);
@@ -134,7 +134,7 @@ void status_bar_set_gear_callback(lv_event_cb_t cb) {
 }
 
 void status_bar_set_active_dot(int view_index) {
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < 5; i++) {
         bool active = (i == view_index);
         lv_obj_set_style_bg_color(nav_btns[i],
             active ? STATUS_ACCENT_COLOR : STATUS_BG_COLOR, 0);
