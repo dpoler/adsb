@@ -166,8 +166,9 @@ void setup() {
 
     bool first_boot = (g_config.wifi_ssid[0] == '\0');
     settings_set_change_callback([](const UserConfig *cfg) {
+        bool radius_changed = (cfg->radius_nm != g_config.radius_nm);
         g_config = *cfg;
-        range_set_default(cfg->radius_nm);
+        if (radius_changed) range_set_default(cfg->radius_nm);
         map_view_center_on(cfg->home_lat, cfg->home_lon);
         radar_view_set_home(cfg->home_lat, cfg->home_lon);
     });
