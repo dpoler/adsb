@@ -168,6 +168,8 @@ void setup() {
     settings_set_change_callback([](const UserConfig *cfg) {
         g_config = *cfg;
         range_set_default(cfg->radius_nm);
+        map_view_center_on(cfg->home_lat, cfg->home_lon);
+        radar_view_set_home(cfg->home_lat, cfg->home_lon);
     });
 
     // On first boot (no credentials in NVS), open settings automatically

@@ -544,3 +544,9 @@ void radar_view_init(lv_obj_t *parent, AircraftList *list) {
 void radar_view_update() {
     if (_radar_obj) lv_obj_invalidate(_radar_obj);
 }
+
+void radar_view_set_home(float lat, float lon) {
+    _proj.center_lat = lat;
+    _proj.center_lon = lon;
+    if (_radar_obj) lv_obj_invalidate(_radar_obj);
+}

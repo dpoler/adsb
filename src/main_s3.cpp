@@ -14,6 +14,8 @@
 #include "ui_s3/detail_card.h"
 #include "ui_s3/alerts.h"
 #include "ui_s3/settings.h"
+#include "ui_s3/map_view.h"
+#include "ui_s3/radar_view.h"
 
 // Global touch state — read by view timers to defer heavy rendering during interaction
 volatile bool touch_active = false;
@@ -133,6 +135,8 @@ void setup() {
 
     settings_set_change_callback([](const UserConfig *cfg) {
         g_config = *cfg;
+        map_view_center_on(cfg->home_lat, cfg->home_lon);
+        radar_view_set_home(cfg->home_lat, cfg->home_lon);
     });
 
     // Periodic status bar update
