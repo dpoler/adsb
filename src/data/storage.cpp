@@ -29,6 +29,7 @@ UserConfig storage_load_config() {
     cfg.trails_enabled = true;
     cfg.trail_max_points = 30;
     cfg.trail_style = 0;
+    cfg.hide_ground = false;
     cfg.map_zoom_idx = 1;    // 50nm default
     cfg.radar_zoom_idx = 0;  // 100nm default
     cfg.arrivals_filter_idx = 4; // ALL default
@@ -57,6 +58,7 @@ UserConfig storage_load_config() {
     cfg.map_zoom_idx = _prefs.getInt("map_zoom", cfg.map_zoom_idx);
     cfg.radar_zoom_idx = _prefs.getInt("rdr_zoom", cfg.radar_zoom_idx);
     cfg.arrivals_filter_idx = _prefs.getInt("arr_filt", cfg.arrivals_filter_idx);
+    cfg.hide_ground = _prefs.getBool("hide_gnd", cfg.hide_ground);
 
     _prefs.end();
     Serial.println("Storage: config loaded from NVS");
@@ -85,6 +87,7 @@ void storage_save_config(const UserConfig &cfg) {
     _prefs.putInt("map_zoom", cfg.map_zoom_idx);
     _prefs.putInt("rdr_zoom", cfg.radar_zoom_idx);
     _prefs.putInt("arr_filt", cfg.arrivals_filter_idx);
+    _prefs.putBool("hide_gnd", cfg.hide_ground);
 
     _prefs.end();
     Serial.println("Storage: config saved to NVS");

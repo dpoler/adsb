@@ -437,6 +437,7 @@ static void draw_aircraft(lv_layer_t *layer) {
         uint8_t ac_opa = compute_aircraft_opacity(ac.stale_since, now);
         if (ac_opa == 0) continue;
         if (!aircraft_passes_filter(ac)) continue;
+        if (g_config.hide_ground && ac.on_ground) continue;
 
         int sx, sy;
         if (!_proj.to_screen(ac.lat, ac.lon, sx, sy)) continue;

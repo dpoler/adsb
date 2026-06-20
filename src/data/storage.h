@@ -26,6 +26,9 @@ struct UserConfig {
     int trail_max_points;    // 10-60 (default 30)
     int trail_style;         // 0=line, 1=dots
 
+    // Display filters
+    bool hide_ground;          // don't show aircraft with on_ground flag set
+
     // Zoom indices (persisted per-view)
     int map_zoom_idx;
     int radar_zoom_idx;

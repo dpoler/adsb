@@ -87,7 +87,7 @@ static void cycle_timer_cb(lv_timer_t *t) {
 
     if (now - _last_cycle_time >= dwell) {
         _last_cycle_time = now;
-        int next = (_active_index + 1) % 4;
+        int next = (_active_index + 1) % 4;  // cycle only among the 4 main views
         if (next == VIEW_MAP) range_cycle();
         // Update state directly — don't rely on VALUE_CHANGED callback
         _active_index = next;
@@ -109,10 +109,10 @@ void views_init(lv_obj_t *parent, AircraftList *list) {
     lv_obj_set_style_bg_opa(tileview, LV_OPA_COVER, 0);
 
     // Create 4 horizontal tiles — all get opaque backgrounds to prevent bleed-through during scroll animation
-    tiles[VIEW_MAP] = lv_tileview_add_tile(tileview, 0, 0, LV_DIR_RIGHT);
-    tiles[VIEW_RADAR] = lv_tileview_add_tile(tileview, 1, 0, (lv_dir_t)(LV_DIR_LEFT | LV_DIR_RIGHT));
-    tiles[VIEW_ARRIVALS] = lv_tileview_add_tile(tileview, 2, 0, (lv_dir_t)(LV_DIR_LEFT | LV_DIR_RIGHT));
-    tiles[VIEW_STATS] = lv_tileview_add_tile(tileview, 3, 0, LV_DIR_LEFT);
+    tiles[VIEW_MAP]     = lv_tileview_add_tile(tileview, 0, 0, LV_DIR_RIGHT);
+    tiles[VIEW_RADAR]   = lv_tileview_add_tile(tileview, 1, 0, (lv_dir_t)(LV_DIR_LEFT | LV_DIR_RIGHT));
+    tiles[VIEW_ARRIVALS]= lv_tileview_add_tile(tileview, 2, 0, (lv_dir_t)(LV_DIR_LEFT | LV_DIR_RIGHT));
+    tiles[VIEW_STATS]   = lv_tileview_add_tile(tileview, 3, 0, LV_DIR_LEFT);
     for (int i = 0; i < 4; i++) {
         lv_obj_set_style_bg_color(tiles[i], lv_color_hex(0x0a0a1a), 0);
         lv_obj_set_style_bg_opa(tiles[i], LV_OPA_COVER, 0);
