@@ -109,7 +109,7 @@ void views_init(lv_obj_t *parent, AircraftList *list) {
     lv_obj_set_style_bg_opa(tileview, LV_OPA_COVER, 0);
 
     // Create 4 horizontal tiles — all get opaque backgrounds to prevent bleed-through during scroll animation.
-    // Runway diagrams live inside Map view now (see map_view.cpp draw_runways) —
+    // Runway diagrams live inside Map view now (see map_view.cpp draw_saved_airports) —
     // there's no separate APRT tile; which airport's data these show is
     // controlled by the location picker (see locations.h), not by swiping.
     tiles[VIEW_MAP]     = lv_tileview_add_tile(tileview, 0, 0, LV_DIR_RIGHT);

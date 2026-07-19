@@ -195,22 +195,27 @@ bool locations_add_from_icao(const char *icao, char *err, size_t err_size) {
             if (total > 0) {
                 JsonDocument doc(&_psram_alloc);
                 if (!deserializeJson(doc, buf, total)) {
-                    float lat = doc["latitude_deg"] | 0.0f;
-                    float lon = doc["longitude_deg"] | 0.0f;
+                    // airportdb.io returns every coordinate as a JSON *string*
+                    // (e.g. "39.8409"), not a number — inherited from its CSV
+                    // pipeline. Use .as<float>() (does string->number
+                    // conversion) rather than the `| default` operator (which
+                    // only converts when the stored type already matches).
+                    float lat = doc["latitude_deg"].as<float>();
+                    float lon = doc["longitude_deg"].as<float>();
                     if (lat != 0.0f || lon != 0.0f) {
                         Location loc = {};
                         strlcpy(loc.icao, icao_upper, sizeof(loc.icao));
                         loc.lat = lat;
                         loc.lon = lon;
-                        loc.elevation_ft = doc["elevation_ft"] | 0;
+                        loc.elevation_ft = doc["elevation_ft"].as<int>();
 
                         JsonArray rwys = doc["runways"].as<JsonArray>();
                         for (JsonObject r : rwys) {
                             if (loc.runway_count >= MAX_RUNWAYS) break;
-                            float le_lat = r["le_latitude_deg"] | 0.0f;
-                            float le_lon = r["le_longitude_deg"] | 0.0f;
-                            float he_lat = r["he_latitude_deg"] | 0.0f;
-                            float he_lon = r["he_longitude_deg"] | 0.0f;
+                            float le_lat = r["le_latitude_deg"].as<float>();
+                            float le_lon = r["le_longitude_deg"].as<float>();
+                            float he_lat = r["he_latitude_deg"].as<float>();
+                            float he_lon = r["he_longitude_deg"].as<float>();
                             // Skip runways OurAirports has no threshold coordinates for —
                             // draw only what we can actually place on the map.
                             if ((le_lat == 0.0f && le_lon == 0.0f) ||

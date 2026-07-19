@@ -6,6 +6,7 @@ components/vendor_hal/
 *.so
 *.dylib
 src/ui/static_map_data.h
+src/ui/airports_db.h
 src/config.h
 *.bak
 *.full
