@@ -36,12 +36,11 @@ enum SortMode {
 // Sortable column indices (into columns[])
 #define COL_FLIGHT 0
 #define COL_TYPE   1
-#define COL_ROUTE  2
-#define COL_ALT    3
-#define COL_SPD    4
-#define COL_DIST   5
-#define COL_HDG    6
-#define COL_STATUS 7
+#define COL_ALT    2
+#define COL_SPD    3
+#define COL_DIST   4
+#define COL_HDG    5
+#define COL_STATUS 6
 
 static int  _sort_col  = COL_DIST;   // which column is sorted
 static SortMode _sort_dir = SORT_ASC; // ascending by default
@@ -63,14 +62,13 @@ struct Column {
 static Column columns[] = {
     {"FLIGHT",  10,  true},
     {"TYPE",   180, false},
-    {"ROUTE",  280, false},
-    {"ALT",    430, true},
-    {"SPD",    520, true},
-    {"DIST",   600, true},
-    {"HDG",    700, false},
-    {"STATUS", 780, false},
+    {"ALT",    280, true},
+    {"SPD",    370, true},
+    {"DIST",   450, true},
+    {"HDG",    550, false},
+    {"STATUS", 630, false},
 };
-#define NUM_COLS 8
+#define NUM_COLS 7
 
 struct BoardRow {
     lv_obj_t *col_labels[NUM_COLS];
@@ -79,7 +77,7 @@ struct BoardRow {
 };
 
 static BoardRow _rows[MAX_ROWS];
-static lv_obj_t *_header_labels[8];
+static lv_obj_t *_header_labels[NUM_COLS];
 static lv_obj_t *_title_label = nullptr;
 
 static const char *status_from_vert_rate(int16_t vr, bool on_ground) {
@@ -209,16 +207,9 @@ static void update_board(lv_timer_t *t) {
         strlcpy(_rows[row].icao_hex, ac.icao_hex, sizeof(_rows[row].icao_hex));
 
         // Format each column
-        char flight[9], type[5], route[8], alt[5], spd[4], dist[5], hdg[4], status[8];
+        char flight[9], type[5], alt[5], spd[4], dist[5], hdg[4], status[8];
         snprintf(flight, sizeof(flight), "%-8s", ac.callsign[0] ? ac.callsign : ac.icao_hex);
         snprintf(type, sizeof(type), "%-4s", ac.type_code);
-
-        // Route: "BNA-MDW" or blank if not yet enriched
-        if (ac.origin[0] && ac.origin[0] != '-' && ac.dest[0] && ac.dest[0] != '-') {
-            snprintf(route, sizeof(route), "%-3s-%-3s", ac.origin, ac.dest);
-        } else {
-            snprintf(route, sizeof(route), "       ");
-        }
 
         if (ac.on_ground) snprintf(alt, sizeof(alt), " GND");
         else snprintf(alt, sizeof(alt), "%4d", ac.altitude / 100);
@@ -230,7 +221,7 @@ static void update_board(lv_timer_t *t) {
         snprintf(hdg, sizeof(hdg), "%03d", ac.heading);
         snprintf(status, sizeof(status), "%-7s", status_from_vert_rate(ac.vert_rate, ac.on_ground));
 
-        const char *texts[] = {flight, type, route, alt, spd, dist, hdg, status};
+        const char *texts[] = {flight, type, alt, spd, dist, hdg, status};
 
         lv_color_t color = CELL_TEXT;
         if (ac.is_emergency) color = EMERGENCY_CLR;
@@ -254,7 +245,7 @@ static void update_board(lv_timer_t *t) {
     // Clear rows below the displayed count
     for (; row < MAX_ROWS; row++) {
         if (_rows[row].active) {
-            const char *blanks[] = {"", "", "", "", "", "", "", ""};
+            const char *blanks[] = {"", "", "", "", "", "", ""};
             set_row_text(row, blanks, CELL_TEXT);
             _rows[row].active = false;
             memset(_rows[row].icao_hex, 0, sizeof(_rows[row].icao_hex));

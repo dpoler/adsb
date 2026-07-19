@@ -4,9 +4,6 @@
 struct AircraftEnrichment {
     char photo_url[256];
     char photo_photographer[48];
-    char airline[32];
-    char origin_airport[48];      // Full name: "John F Kennedy International Airport"
-    char destination_airport[48]; // Full name: "Los Angeles International Airport"
     char manufacturer[32];
     char model[48];
     char owner[48];
@@ -24,7 +21,6 @@ void enrichment_init();
 // Fetch enrichment data in background. Calls callback progressively as data arrives.
 // Callback is always called from LVGL context (safe to update UI).
 void enrichment_fetch(const char *icao_hex, const char *registration,
-                      const char *callsign,
                       void (*callback)(AircraftEnrichment *data));
 
 // Get cached enrichment (returns nullptr if not yet fetched)

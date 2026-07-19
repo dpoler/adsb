@@ -77,7 +77,6 @@ static lv_obj_t *_flash_val = nullptr;
 // Network stats
 static lv_obj_t *_ip_val = nullptr;
 static lv_obj_t *_fetch_val = nullptr;
-static lv_obj_t *_enrich_val = nullptr;
 static lv_obj_t *_bytes_val = nullptr;
 static lv_obj_t *_latency_val = nullptr;
 static lv_obj_t *_rssi_val = nullptr;
@@ -302,7 +301,6 @@ static void refresh_stats(lv_timer_t *t) {
         lv_label_set_text(_ip_val, fs->ip_addr);
     }
     lv_label_set_text_fmt(_fetch_val, "%lu ok / %lu err", (unsigned long)fs->fetch_ok, (unsigned long)fs->fetch_fail);
-    lv_label_set_text_fmt(_enrich_val, "%lu ok / %lu err", (unsigned long)fs->enrich_ok, (unsigned long)fs->enrich_fail);
 
     if (fs->bytes_received > 1048576) {
         lv_label_set_text_fmt(_bytes_val, "%.1fMB", (double)fs->bytes_received / 1048576.0);
@@ -518,9 +516,8 @@ void stats_view_init(lv_obj_t *parent, AircraftList *list) {
     _ip_val = create_stat_pair(_container, "IP", rx, 26, SYS_COLOR);
     _rssi_val = create_stat_pair(_container, "LINK", rx, 60, SYS_COLOR);
     _fetch_val = create_stat_pair(_container, "FETCHES", rx, 94, SYS_COLOR);
-    _enrich_val = create_stat_pair(_container, "ENRICH", rx, 128, SYS_COLOR);
-    _bytes_val = create_stat_pair(_container, "RX DATA", rx, 162, SYS_COLOR);
-    _latency_val = create_stat_pair(_container, "LATENCY", rx, 196, SYS_COLOR);
+    _bytes_val = create_stat_pair(_container, "RX DATA", rx, 128, SYS_COLOR);
+    _latency_val = create_stat_pair(_container, "LATENCY", rx, 162, SYS_COLOR);
 
     // Error log section
     int ey = 240;

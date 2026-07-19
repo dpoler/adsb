@@ -36,7 +36,6 @@ static volatile bool _deferred_ready = false;
 
 struct EnrichParams {
     char icao_hex[7];
-    char callsign[9];
 };
 
 AircraftEnrichment *enrichment_get_cached(const char *icao_hex) {
@@ -100,30 +99,7 @@ static void fetch_task(void *param) {
     AircraftEnrichment *entry = get_or_create_cache_entry(params->icao_hex);
     entry->loading = true;
 
-    // Stage 1: Full airport names from adsbdb callsign API
-    if (params->callsign[0] && http_mutex_acquire(pdMS_TO_TICKS(8000))) {
-        char url[128];
-        snprintf(url, sizeof(url), "https://api.adsbdb.com/v0/callsign/%s", params->callsign);
-        HTTPClient http;
-        http.begin(url);
-        http.setTimeout(5000);
-        if (http.GET() == HTTP_CODE_OK) {
-            JsonDocument doc(&_enrich_alloc);
-            if (fetch_and_parse(http, doc)) {
-                JsonObject route = doc["response"]["flightroute"];
-                strlcpy(entry->origin_airport, route["origin"]["name"] | "", sizeof(entry->origin_airport));
-                strlcpy(entry->destination_airport, route["destination"]["name"] | "", sizeof(entry->destination_airport));
-                const char *airline = route["airline"]["name"] | "";
-                if (airline[0]) strlcpy(entry->airline, airline, sizeof(entry->airline));
-            }
-        } else {
-            http.end();
-        }
-        http_mutex_release();
-        notify_callback(entry);
-    }
-
-    // Stage 2: Aircraft details from adsbdb
+    // Stage 1: Aircraft details from adsbdb
     if (http_mutex_acquire(pdMS_TO_TICKS(8000))) {
         char url[128];
         snprintf(url, sizeof(url), "https://api.adsbdb.com/v0/aircraft/%s", params->icao_hex);
@@ -150,7 +126,7 @@ static void fetch_task(void *param) {
         notify_callback(entry);
     }
 
-    // Stage 3: Photo from planespotters.net
+    // Stage 2: Photo from planespotters.net
     vTaskDelay(pdMS_TO_TICKS(200));
     if (http_mutex_acquire(pdMS_TO_TICKS(8000))) {
         char url[128];
@@ -184,7 +160,6 @@ static void fetch_task(void *param) {
 }
 
 void enrichment_fetch(const char *icao_hex, const char *registration,
-                      const char *callsign,
                       void (*callback)(AircraftEnrichment *data)) {
     // Check cache first
     AircraftEnrichment *cached = enrichment_get_cached(icao_hex);
@@ -204,7 +179,6 @@ void enrichment_fetch(const char *icao_hex, const char *registration,
 
     EnrichParams *params = (EnrichParams *)malloc(sizeof(EnrichParams));
     strlcpy(params->icao_hex, icao_hex, sizeof(params->icao_hex));
-    strlcpy(params->callsign, callsign ? callsign : "", sizeof(params->callsign));
     xTaskCreatePinnedToCore(fetch_task, "enrich", 10240, params, 0, nullptr, 1);
 }
 

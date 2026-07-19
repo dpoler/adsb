@@ -88,12 +88,12 @@ static volatile NetType _active_net = NET_NONE;
 static AircraftList *_aircraft_list = nullptr;
 static uint32_t _last_update = 0;
 static TaskHandle_t _fetch_task_handle = nullptr;
-static TaskHandle_t _route_task_handle = nullptr;
+static TaskHandle_t _location_poll_task_handle = nullptr;
 static FetcherStats _fstats = {};
 
 // Secondary point query for a non-home airport (APRT view). Guarded by its
 // own small mutex since it's written from the UI task and read from
-// location_fetch_poll (polled from within route_enrich_task).
+// location_fetch_poll (polled from within location_poll_task).
 static AircraftList _loc_list;
 static SemaphoreHandle_t _loc_target_mutex = nullptr;
 static float _loc_target_lat = 0, _loc_target_lon = 0;
@@ -195,7 +195,6 @@ static void apply_parsed(Aircraft &a, const ParsedEntry &p, bool is_new) {
     strlcpy(a.category, p.category, sizeof(a.category));
     strlcpy(a.desc, p.desc, sizeof(a.desc));
     strlcpy(a.owner_op, p.owner_op, sizeof(a.owner_op));
-    // Don't overwrite enriched route data (origin/dest set by route_enrich_task)
     a.lat = p.lat;
     a.lon = p.lon;
     a.altitude = p.altitude;
@@ -356,7 +355,7 @@ static void update_ip_addr() {
 }
 
 // On-demand point query for a non-home airport (APRT view). Called from
-// route_enrich_task's own loop (not a separate task — this project's
+// location_poll_task's own loop (not a separate task — this project's
 // ESP32-P4/C6 combo already runs thin on internal heap, and every extra
 // FreeRTOS task stack is internal DRAM taken away from the SDIO/WiFi driver;
 // a dedicated task for this crashed the SDIO transport under memory pressure).
@@ -571,116 +570,23 @@ static void fetch_task(void *param) {
 }
 
 // Background task: fetch route (origin/dest) for aircraft with callsigns
-static void route_enrich_task(void *param) {
-    // Wait for network
+// Was route_enrich_task (adsbdb.com callsign->route lookups) — removed
+// entirely, since that data comes from the same VRS Standing Data source
+// already documented as unreliable/stale (crowd-sourced, callsign-keyed, no
+// versioning — see project_route_data memory). Kept as a lightweight task
+// purely to drive location_fetch_poll()/locations_add_poll() on their own
+// existing cadence, rather than spawning a new task for them — see
+// project_p4_heap_constraints memory for why that matters on this board.
+static void location_poll_task(void *param) {
     while (!network_connected()) {
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
     vTaskDelay(pdMS_TO_TICKS(5000)); // let main fetcher populate list first
 
     while (true) {
-        location_fetch_poll(); // piggyback the active-location aircraft query on this task's own cadence
-        locations_add_poll();  // piggyback "add airport by ICAO" fetches too — see locations.h
-
-        // Find next aircraft that has a callsign but no route data
-        char callsign[9] = {};
-        char icao_hex[7] = {};
-        bool found = false;
-
-        if (_aircraft_list->lock(pdMS_TO_TICKS(100))) {
-            for (int i = 0; i < _aircraft_list->count; i++) {
-                Aircraft &a = _aircraft_list->aircraft[i];
-                if (a.callsign[0] && !a.origin[0] && a.stale_since == 0) {
-                    strlcpy(callsign, a.callsign, sizeof(callsign));
-                    strlcpy(icao_hex, a.icao_hex, sizeof(icao_hex));
-                    found = true;
-                    break;
-                }
-            }
-            _aircraft_list->unlock();
-        }
-
-        if (!found || !network_connected()) {
-            vTaskDelay(pdMS_TO_TICKS(3000));
-            continue;
-        }
-
-        // Fetch route from adsbdb
-        char origin[5] = {};
-        char dest[5] = {};
-
-        if (http_mutex_acquire(pdMS_TO_TICKS(12000))) {
-            char url[128];
-            snprintf(url, sizeof(url), "https://api.adsbdb.com/v0/callsign/%s", callsign);
-            HTTPClient http;
-            http.begin(url);
-            http.setTimeout(8000);
-            int code = http.GET();
-
-            if (code == HTTP_CODE_OK) {
-                // Read into PSRAM buffer, then parse
-                int rlen = http.getSize();
-                char *rbuf = (char *)heap_caps_malloc(8192, MALLOC_CAP_SPIRAM);
-                size_t rtotal = 0;
-                if (rbuf) {
-                    if (rlen > 0 && rlen < 8192) {
-                        rtotal = http.getStreamPtr()->readBytes(rbuf, rlen);
-                    } else {
-                        WiFiClient *stream = http.getStreamPtr();
-                        uint32_t deadline = millis() + 10000;
-                        while (rtotal < 8191 && millis() < deadline) {
-                            int avail = stream->available();
-                            if (avail > 0) {
-                                int to_read = min((size_t)avail, 8191 - rtotal);
-                                rtotal += stream->readBytes(rbuf + rtotal, to_read);
-                            } else if (!stream->connected()) {
-                                break;
-                            } else {
-                                vTaskDelay(1);
-                            }
-                        }
-                    }
-                    rbuf[rtotal] = '\0';
-                    JsonDocument doc(&_psram_alloc);
-                    if (!deserializeJson(doc, rbuf, rtotal)) {
-                        JsonObject route = doc["response"]["flightroute"];
-                        const char *orig_iata = route["origin"]["iata_code"] | "";
-                        const char *dest_iata = route["destination"]["iata_code"] | "";
-                        strlcpy(origin, orig_iata, sizeof(origin));
-                        strlcpy(dest, dest_iata, sizeof(dest));
-                        _fstats.enrich_ok++;
-                    } else {
-                        _fstats.enrich_fail++;
-                        error_log_add("Route JSON fail: %s", callsign);
-                    }
-                    heap_caps_free(rbuf);
-                }
-            } else {
-                _fstats.enrich_fail++;
-                // 404 = no route data (normal for GA/private) — don't log
-                if (code != 404) {
-                    error_log_add("Route HTTP %d: %s", code, callsign);
-                }
-            }
-            http.end();
-            http_mutex_release();
-        }
-
-        // Write results back (even empty — marks as "tried" so we don't re-fetch)
-        if (_aircraft_list->lock(pdMS_TO_TICKS(100))) {
-            int idx = find_aircraft(_aircraft_list, icao_hex);
-            if (idx >= 0) {
-                Aircraft &a = _aircraft_list->aircraft[idx];
-                if (origin[0]) strlcpy(a.origin, origin, sizeof(a.origin));
-                else strlcpy(a.origin, "-", sizeof(a.origin)); // mark as tried
-                if (dest[0]) strlcpy(a.dest, dest, sizeof(a.dest));
-                else strlcpy(a.dest, "-", sizeof(a.dest));
-                Serial.printf("Route: %s %s->%s\n", callsign, a.origin, a.dest);
-            }
-            _aircraft_list->unlock();
-        }
-
-        vTaskDelay(pdMS_TO_TICKS(1500)); // rate limit: ~1 req per 1.5s
+        location_fetch_poll();
+        locations_add_poll();
+        vTaskDelay(pdMS_TO_TICKS(1500));
     }
 }
 
@@ -720,7 +626,7 @@ void fetcher_init(AircraftList *list) {
     }
 
     xTaskCreatePinnedToCore(fetch_task, "adsb_fetch", 32768, nullptr, 1, &_fetch_task_handle, 1);
-    xTaskCreatePinnedToCore(route_enrich_task, "route_enrich", 16384, nullptr, 0, &_route_task_handle, 1);
+    xTaskCreatePinnedToCore(location_poll_task, "loc_poll", 16384, nullptr, 0, &_location_poll_task_handle, 1);
 }
 
 bool fetcher_wifi_connected() {

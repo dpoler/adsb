@@ -40,7 +40,7 @@ bool locations_add_from_icao(const char *icao, char *err, size_t err_size);
 // pressure to crash the SDIO driver on this board (see
 // project_p4_heap_constraints memory). Instead: the UI calls
 // locations_request_add(), and locations_add_poll() — called from
-// route_enrich_task's existing loop in fetcher.cpp — picks it up and does the
+// location_poll_task's existing loop in fetcher.cpp — picks it up and does the
 // actual fetch on that task's already-allocated stack.
 void locations_request_add(const char *icao);
 void locations_add_poll();

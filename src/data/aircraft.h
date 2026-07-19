@@ -23,8 +23,6 @@ struct Aircraft {
     char category[3];       // ADS-B emitter category e.g. "A3"
     char desc[40];          // type description e.g. "Boeing 737-800"
     char owner_op[32];      // operator e.g. "United Airlines"
-    char origin[5];         // IATA airport code e.g. "ATL"
-    char dest[5];           // IATA airport code e.g. "MDW"
     float lat;
     float lon;
     int32_t altitude;       // feet

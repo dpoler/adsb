@@ -237,14 +237,10 @@ static void draw_blips(lv_layer_t *layer) {
 
             if (behind < PAINT_DETAIL_DEG) {
                 // === PAINT ZONE: expanded detail ===
-                // Line 1: Callsign + route
+                // Line 1: Callsign
                 const char *cs = ac.callsign[0] ? ac.callsign : ac.icao_hex;
                 char line1[48];
-                if (ac.origin[0] && ac.origin[0] != '-' && ac.dest[0] && ac.dest[0] != '-') {
-                    snprintf(line1, sizeof(line1), "%s  %s-%s", cs, ac.origin, ac.dest);
-                } else {
-                    strlcpy(line1, cs, sizeof(line1));
-                }
+                strlcpy(line1, cs, sizeof(line1));
                 lv_draw_label_dsc_t l1;
                 lv_draw_label_dsc_init(&l1);
                 l1.color = color;
@@ -305,20 +301,16 @@ static void draw_blips(lv_layer_t *layer) {
                     lv_draw_label(layer, &l4, &a4);
                 }
             } else {
-                // === CONDENSED ZONE: callsign + route + alt/speed ===
+                // === CONDENSED ZONE: callsign + alt/speed ===
                 const char *cs = ac.callsign[0] ? ac.callsign : ac.icao_hex;
                 char alt_str[12];
                 if (ac.on_ground) snprintf(alt_str, sizeof(alt_str), "GND");
                 else if (ac.altitude >= 18000) snprintf(alt_str, sizeof(alt_str), "FL%d", ac.altitude / 100);
                 else snprintf(alt_str, sizeof(alt_str), "%d'", ac.altitude / 100 * 100);
 
-                // Line 1: callsign + route
+                // Line 1: callsign
                 char top[36];
-                if (ac.origin[0] && ac.origin[0] != '-' && ac.dest[0] && ac.dest[0] != '-') {
-                    snprintf(top, sizeof(top), "%s %s-%s", cs, ac.origin, ac.dest);
-                } else {
-                    strlcpy(top, cs, sizeof(top));
-                }
+                strlcpy(top, cs, sizeof(top));
                 lv_draw_label_dsc_t lbl;
                 lv_draw_label_dsc_init(&lbl);
                 lbl.color = color;

@@ -27,13 +27,13 @@ static inline void draw_tri(lv_layer_t *layer, int cx, int cy, float sin_h, floa
 static inline void draw_icon_airliner(lv_layer_t *layer, int cx, int cy,
                                       float sin_h, float cos_h, lv_color_t color, uint8_t opa,
                                       float s = 1.0f) {
-    draw_tri(layer, cx, cy, sin_h, cos_h,  0,-18,  1.5f,0,  -1.5f,0,  color, opa, s);
-    draw_tri(layer, cx, cy, sin_h, cos_h,  0,-18,  1.5f,0,  0,18,     color, opa, s);
-    draw_tri(layer, cx, cy, sin_h, cos_h,  0,-18, -1.5f,0,  0,18,     color, opa, s);
-    draw_tri(layer, cx, cy, sin_h, cos_h,  0,-3,  14,2,  0,4,          color, opa, s);
-    draw_tri(layer, cx, cy, sin_h, cos_h,  0,-3, -14,2,  0,4,          color, opa, s);
-    draw_tri(layer, cx, cy, sin_h, cos_h,  0,13,   6,17,  0,18,        color, opa, s);
-    draw_tri(layer, cx, cy, sin_h, cos_h,  0,13,  -6,17,  0,18,        color, opa, s);
+    draw_tri(layer, cx, cy, sin_h, cos_h,  0,-12,  1,0,  -1,0,  color, opa, s);
+    draw_tri(layer, cx, cy, sin_h, cos_h,  0,-12,  1,0,  0,12,  color, opa, s);
+    draw_tri(layer, cx, cy, sin_h, cos_h,  0,-12, -1,0,  0,12,  color, opa, s);
+    draw_tri(layer, cx, cy, sin_h, cos_h,  0,-2,   9,1,  0,3,   color, opa, s);
+    draw_tri(layer, cx, cy, sin_h, cos_h,  0,-2,  -9,1,  0,3,   color, opa, s);
+    draw_tri(layer, cx, cy, sin_h, cos_h,  0,9,    4,11, 0,12,  color, opa, s);
+    draw_tri(layer, cx, cy, sin_h, cos_h,  0,9,   -4,11, 0,12,  color, opa, s);
 }
 
 static inline void draw_icon_jet(lv_layer_t *layer, int cx, int cy,

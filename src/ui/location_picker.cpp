@@ -26,7 +26,7 @@ static lv_obj_t *_overlay = nullptr;   // full-screen dim backdrop, closes on ta
 static lv_obj_t *_panel = nullptr;     // the actual popover content
 static lv_obj_t *_keyboard = nullptr;  // shared by the add-view textarea, lives on _overlay
 
-// The actual fetch runs on route_enrich_task's existing stack (see
+// The actual fetch runs on location_poll_task's existing stack (see
 // locations_add_poll() / project_p4_heap_constraints memory — a dedicated
 // task for this crashed the SDIO driver under memory pressure). This module
 // just tracks whether a request is outstanding so the UI can poll for it.
@@ -230,7 +230,7 @@ static void fetch_btn_click_cb(lv_event_t *e) {
     lv_label_set_text(_add_status_lbl, "Fetching...");
     lv_obj_set_style_text_color(_add_status_lbl, COLOR_DIM, 0);
 
-    locations_request_add(icao); // picked up by route_enrich_task's loop
+    locations_request_add(icao); // picked up by location_poll_task's loop
 }
 
 static void build_add_view() {
@@ -318,7 +318,7 @@ void location_picker_init(lv_obj_t *screen) {
     update_picker_label();
 
     // Poll for a completed "add" fetch — the actual work happens on
-    // route_enrich_task's stack via locations_add_poll(); this just checks
+    // location_poll_task's stack via locations_add_poll(); this just checks
     // for the result (see locations.h / project_p4_heap_constraints memory).
     lv_timer_create([](lv_timer_t *t) {
         if (!_add_in_progress) return;

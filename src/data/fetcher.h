@@ -27,8 +27,6 @@ AircraftList* fetcher_location_list();
 struct FetcherStats {
     uint32_t fetch_ok;
     uint32_t fetch_fail;
-    uint32_t enrich_ok;
-    uint32_t enrich_fail;
     uint32_t bytes_received;
     uint32_t last_fetch_ms;     // duration of last successful fetch
     char ip_addr[16];

@@ -36,7 +36,7 @@ static int _active_index = -1; // -1 = Home
 static void location_sync_timer_cb(lv_timer_t *t);
 
 // "Add by ICAO" request/response — processed by locations_add_poll(), called
-// from route_enrich_task's existing loop rather than a dedicated task.
+// from location_poll_task's existing loop rather than a dedicated task.
 static SemaphoreHandle_t _add_mutex = nullptr;
 static bool _add_pending = false;
 static char _add_pending_icao[LOC_ICAO_LEN] = {};

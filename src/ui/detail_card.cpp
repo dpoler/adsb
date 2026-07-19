@@ -16,8 +16,6 @@ static lv_obj_t *_reg_label = nullptr;
 
 // Identity
 static lv_obj_t *_operator_label = nullptr;
-static lv_obj_t *_route_label = nullptr;
-static lv_obj_t *_route_full_label = nullptr;
 static lv_obj_t *_type_label = nullptr;
 static lv_obj_t *_cat_label = nullptr;
 static lv_obj_t *_aircraft_detail_label = nullptr;
@@ -116,17 +114,6 @@ static const char *decode_squawk(uint16_t sq) {
 
 static void on_enrichment_ready(AircraftEnrichment *data) {
     if (!_visible) return;
-
-    // Full airport names
-    if (data->origin_airport[0] && data->destination_airport[0]) {
-        lv_label_set_text_fmt(_route_full_label, "%s  ->  %s",
-                              data->origin_airport, data->destination_airport);
-    }
-
-    // Operator/airline — prefer enrichment
-    if (data->airline[0]) {
-        lv_label_set_text(_operator_label, data->airline);
-    }
 
     // Model — more detailed than bulk API desc
     if (data->model[0]) {
@@ -263,32 +250,21 @@ void detail_card_init(lv_obj_t *parent) {
     lv_obj_set_style_text_color(_operator_label, CARD_ACCENT, 0);
     lv_obj_set_pos(_operator_label, 0, 58);
 
-    _route_label = lv_label_create(_card);
-    lv_obj_set_style_text_font(_route_label, &lv_font_montserrat_16, 0);
-    lv_obj_set_style_text_color(_route_label, lv_color_white(), 0);
-    lv_obj_set_pos(_route_label, 0, 78);
-
-    _route_full_label = lv_label_create(_card);
-    lv_obj_set_style_text_font(_route_full_label, &lv_font_montserrat_14, 0);
-    lv_obj_set_style_text_color(_route_full_label, CARD_DIM, 0);
-    lv_obj_set_pos(_route_full_label, 0, 98);
-    lv_label_set_text(_route_full_label, "");
-
     _type_label = lv_label_create(_card);
     lv_obj_set_style_text_font(_type_label, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(_type_label, CARD_TEXT, 0);
-    lv_obj_set_pos(_type_label, 0, 118);
+    lv_obj_set_pos(_type_label, 0, 78);
 
     _cat_label = lv_label_create(_card);
     lv_obj_set_style_text_font(_cat_label, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(_cat_label, CARD_DIM, 0);
-    lv_obj_set_pos(_cat_label, 500, 118);
+    lv_obj_set_pos(_cat_label, 500, 78);
 
     _aircraft_detail_label = lv_label_create(_card);
     lv_label_set_text(_aircraft_detail_label, "");
     lv_obj_set_style_text_font(_aircraft_detail_label, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(_aircraft_detail_label, CARD_DIM, 0);
-    lv_obj_set_pos(_aircraft_detail_label, 0, 138);
+    lv_obj_set_pos(_aircraft_detail_label, 0, 98);
 
     // === DATA GRID ROW 1 — flight state ===
     int y1 = 178;
@@ -358,16 +334,7 @@ void detail_card_show(const Aircraft *ac) {
     }
 
     // === IDENTITY ===
-    // Operator — show bulk API owner_op immediately, enrichment may override
     lv_label_set_text(_operator_label, ac->owner_op[0] ? ac->owner_op : "");
-
-    // Route (IATA codes from route_enrich_task)
-    if (ac->origin[0] && ac->origin[0] != '-' && ac->dest[0] && ac->dest[0] != '-') {
-        lv_label_set_text_fmt(_route_label, "%s  ->  %s", ac->origin, ac->dest);
-    } else {
-        lv_label_set_text(_route_label, "");
-    }
-    lv_label_set_text(_route_full_label, ""); // enrichment fills this
 
     // Type description
     if (ac->desc[0]) {
@@ -514,7 +481,7 @@ void detail_card_show(const Aircraft *ac) {
 
     // Fetch enrichment (adsbdb + planespotters)
     lv_obj_clear_flag(_loading_spinner, LV_OBJ_FLAG_HIDDEN);
-    enrichment_fetch(ac->icao_hex, ac->registration, ac->callsign, on_enrichment_ready);
+    enrichment_fetch(ac->icao_hex, ac->registration, on_enrichment_ready);
 }
 
 void detail_card_hide() {
