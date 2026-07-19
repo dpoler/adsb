@@ -5,10 +5,13 @@
 #include "filters.h"
 #include "../pins_config.h"
 #include "../data/storage.h"
+#include "../data/locations.h"
 #include "geo.h"
 #include "range.h"
 
-static AircraftList *_list = nullptr;
+static AircraftList *_list = nullptr;      // currently effective list
+static AircraftList *_home_list = nullptr; // the list passed in at init
+static int _last_active_loc = -2;          // sentinel — -1 is a valid "Home"
 static lv_obj_t *_radar_obj = nullptr;
 static lv_obj_t *_range_label = nullptr;
 
@@ -402,6 +405,7 @@ static void radar_filter_click_cb(lv_event_t *e) {
 
 void radar_view_init(lv_obj_t *parent, AircraftList *list) {
     _list = list;
+    _home_list = list;
 
     _proj.center_lat = g_config.home_lat;
     _proj.center_lon = g_config.home_lon;
@@ -515,6 +519,20 @@ void radar_view_init(lv_obj_t *parent, AircraftList *list) {
         _last_sweep_ms = now;
         _sweep_angle += (360.0f * dt) / SWEEP_PERIOD_MS;
         if (_sweep_angle >= 360.0f) _sweep_angle -= 360.0f;
+
+        // Follow the active location (Home or a saved airport) — cheap check,
+        // no per-view "on_show" hook exists for Radar so this runs every tick.
+        int active = locations_active_index();
+        if (active != _last_active_loc) {
+            _last_active_loc = active;
+            float lat, lon;
+            int elev;
+            if (locations_get_active_coords(&lat, &lon, &elev)) {
+                _proj.center_lat = lat;
+                _proj.center_lon = lon;
+            }
+            _list = locations_active_list(_home_list);
+        }
 
         // Only update range label when range actually changes
         float r = range_get_nm();

@@ -3,6 +3,7 @@
 #include "http_mutex.h"
 #include "../pins_config.h"
 #include "../data/storage.h"
+#include "../data/locations.h"
 #include "../ui/alerts.h"
 #if defined(USE_ETHERNET)
 #include <ETH.h>
@@ -90,6 +91,15 @@ static TaskHandle_t _fetch_task_handle = nullptr;
 static TaskHandle_t _route_task_handle = nullptr;
 static FetcherStats _fstats = {};
 
+// Secondary point query for a non-home airport (APRT view). Guarded by its
+// own small mutex since it's written from the UI task and read from
+// location_fetch_poll (polled from within route_enrich_task).
+static AircraftList _loc_list;
+static SemaphoreHandle_t _loc_target_mutex = nullptr;
+static float _loc_target_lat = 0, _loc_target_lon = 0;
+static int _loc_target_radius = 0;   // <= 0 means inactive
+static uint32_t _loc_target_gen = 0; // bumped whenever the target changes
+
 // Military alert dedup — circular buffer of already-alerted ICAO hexes
 #define ALERTED_MAX 64
 static char _alerted_hexes[ALERTED_MAX][7];
@@ -147,9 +157,9 @@ static bool is_test_signal(const char *hex, const char *callsign) {
 }
 
 // Find existing aircraft by ICAO hex, returns index or -1
-static int find_aircraft(const char *hex) {
-    for (int i = 0; i < _aircraft_list->count; i++) {
-        if (strcmp(_aircraft_list->aircraft[i].icao_hex, hex) == 0)
+static int find_aircraft(AircraftList *list, const char *hex) {
+    for (int i = 0; i < list->count; i++) {
+        if (strcmp(list->aircraft[i].icao_hex, hex) == 0)
             return i;
     }
     return -1;
@@ -219,7 +229,7 @@ static void apply_parsed(Aircraft &a, const ParsedEntry &p, bool is_new) {
     }
 }
 
-static void parse_aircraft_json(JsonDocument &doc) {
+static void parse_aircraft_json(JsonDocument &doc, AircraftList *list, bool do_alerts) {
     JsonArray ac = doc["ac"].as<JsonArray>();
 
     // Phase 1: Parse JSON into flat array — no lock needed
@@ -261,55 +271,57 @@ static void parse_aircraft_json(JsonDocument &doc) {
     }
 
     // Phase 2: Brief lock to merge parsed data into aircraft list
-    if (!_aircraft_list->lock()) return;
+    if (!list->lock()) return;
 
     uint32_t now = millis();
     bool seen[MAX_AIRCRAFT] = {};
 
     for (int p = 0; p < parsed_count; p++) {
-        int idx = find_aircraft(parsed[p].hex);
+        int idx = find_aircraft(list, parsed[p].hex);
         if (idx >= 0) {
-            apply_parsed(_aircraft_list->aircraft[idx], parsed[p], false);
+            apply_parsed(list->aircraft[idx], parsed[p], false);
             seen[idx] = true;
-        } else if (_aircraft_list->count < MAX_AIRCRAFT) {
-            int new_idx = _aircraft_list->count;
-            _aircraft_list->aircraft[new_idx].clear();
-            apply_parsed(_aircraft_list->aircraft[new_idx], parsed[p], true);
-            _aircraft_list->count++;
+        } else if (list->count < MAX_AIRCRAFT) {
+            int new_idx = list->count;
+            list->aircraft[new_idx].clear();
+            apply_parsed(list->aircraft[new_idx], parsed[p], true);
+            list->count++;
             seen[new_idx] = true;
         }
     }
 
     // Mark unseen aircraft as stale, remove expired ghosts
     int write = 0;
-    for (int i = 0; i < _aircraft_list->count; i++) {
-        Aircraft &a = _aircraft_list->aircraft[i];
+    for (int i = 0; i < list->count; i++) {
+        Aircraft &a = list->aircraft[i];
         if (!seen[i]) {
             if (a.stale_since == 0) a.stale_since = now;
             if (now - a.stale_since > GHOST_TIMEOUT_MS) continue;
         }
-        if (write != i) _aircraft_list->aircraft[write] = _aircraft_list->aircraft[i];
+        if (write != i) list->aircraft[write] = list->aircraft[i];
         write++;
     }
-    _aircraft_list->count = write;
+    list->count = write;
 
-    // Check for alerts
-    for (int i = 0; i < _aircraft_list->count; i++) {
-        Aircraft &a = _aircraft_list->aircraft[i];
-        if (a.stale_since != 0) continue;
-        if (a.is_emergency && g_config.alert_emergency) {
-            char msg[48];
-            snprintf(msg, sizeof(msg), "Squawk %04d - %s", a.squawk,
-                     a.squawk == 7500 ? "HIJACK" : a.squawk == 7600 ? "COMMS FAIL" : "EMERGENCY");
-            alerts_queue(ALERT_EMERGENCY, a.callsign[0] ? a.callsign : a.icao_hex, msg, a.icao_hex);
-        } else if (a.is_military && g_config.alert_military && !already_alerted(a.icao_hex)) {
-            mark_alerted(a.icao_hex);
-            alerts_queue(ALERT_MILITARY, a.callsign[0] ? a.callsign : a.icao_hex, a.type_code, a.icao_hex);
+    // Check for alerts (home list only — a remote APRT-view airport shouldn't page you)
+    if (do_alerts) {
+        for (int i = 0; i < list->count; i++) {
+            Aircraft &a = list->aircraft[i];
+            if (a.stale_since != 0) continue;
+            if (a.is_emergency && g_config.alert_emergency) {
+                char msg[48];
+                snprintf(msg, sizeof(msg), "Squawk %04d - %s", a.squawk,
+                         a.squawk == 7500 ? "HIJACK" : a.squawk == 7600 ? "COMMS FAIL" : "EMERGENCY");
+                alerts_queue(ALERT_EMERGENCY, a.callsign[0] ? a.callsign : a.icao_hex, msg, a.icao_hex);
+            } else if (a.is_military && g_config.alert_military && !already_alerted(a.icao_hex)) {
+                mark_alerted(a.icao_hex);
+                alerts_queue(ALERT_MILITARY, a.callsign[0] ? a.callsign : a.icao_hex, a.type_code, a.icao_hex);
+            }
         }
     }
 
-    _aircraft_list->unlock();
-    _last_update = millis();
+    list->unlock();
+    if (list == _aircraft_list) _last_update = millis();
 }
 
 static bool network_connected() {
@@ -341,6 +353,87 @@ static void update_ip_addr() {
         strlcpy(_fstats.ip_addr, WiFi.localIP().toString().c_str(), sizeof(_fstats.ip_addr));
     else
         strlcpy(_fstats.ip_addr, "N/A", sizeof(_fstats.ip_addr));
+}
+
+// On-demand point query for a non-home airport (APRT view). Called from
+// route_enrich_task's own loop (not a separate task — this project's
+// ESP32-P4/C6 combo already runs thin on internal heap, and every extra
+// FreeRTOS task stack is internal DRAM taken away from the SDIO/WiFi driver;
+// a dedicated task for this crashed the SDIO transport under memory pressure).
+// Idles when no target is set; self-throttles to ~15s while a target is
+// active, and fetches immediately whenever the target changes.
+static uint32_t _loc_last_gen = 0;
+static uint32_t _loc_next_fetch = 0;
+
+static void location_fetch_poll() {
+    float lat, lon;
+    int radius;
+    uint32_t gen;
+    xSemaphoreTake(_loc_target_mutex, portMAX_DELAY);
+    lat = _loc_target_lat;
+    lon = _loc_target_lon;
+    radius = _loc_target_radius;
+    gen = _loc_target_gen;
+    xSemaphoreGive(_loc_target_mutex);
+
+    if (radius <= 0) {
+        if (_loc_list.count != 0 && _loc_list.lock(pdMS_TO_TICKS(100))) {
+            _loc_list.count = 0;
+            _loc_list.unlock();
+        }
+        _loc_last_gen = gen;
+        return;
+    }
+
+    uint32_t now = millis();
+    bool target_changed = (gen != _loc_last_gen);
+    if (!target_changed && now < _loc_next_fetch) return;
+    _loc_last_gen = gen;
+    _loc_next_fetch = now + 15000;
+
+    if (!network_connected()) return;
+
+    if (http_mutex_acquire(pdMS_TO_TICKS(10000))) {
+        char url[128];
+        snprintf(url, sizeof(url), "https://api.adsb.lol/v2/point/%.4f/%.4f/%d",
+                 lat, lon, radius);
+        HTTPClient http;
+        http.begin(url);
+        http.setTimeout(8000);
+        int httpCode = http.GET();
+        if (httpCode == HTTP_CODE_OK) {
+            int content_len = http.getSize();
+            size_t buf_size = (content_len > 0) ? (size_t)content_len + 1 : 128 * 1024;
+            char *buf = (char *)heap_caps_malloc(buf_size, MALLOC_CAP_SPIRAM);
+            size_t total = 0;
+            if (buf) {
+                size_t target = (content_len > 0) ? (size_t)content_len : buf_size - 1;
+                WiFiClient *stream = http.getStreamPtr();
+                uint32_t deadline = millis() + 10000;
+                while (total < target && millis() < deadline) {
+                    int avail = stream->available();
+                    if (avail > 0) {
+                        int to_read = min((size_t)avail, target - total);
+                        total += stream->readBytes(buf + total, to_read);
+                    } else if (!stream->connected()) {
+                        break;
+                    } else {
+                        vTaskDelay(1);
+                    }
+                }
+                buf[total] = '\0';
+                if (total > 0) {
+                    JsonDocument doc(&_psram_alloc);
+                    if (!deserializeJson(doc, buf, total)) {
+                        parse_aircraft_json(doc, &_loc_list, false);
+                    }
+                }
+                heap_caps_free(buf);
+            }
+        }
+        http.end();
+        http_mutex_release();
+    }
 }
 
 static void fetch_task(void *param) {
@@ -420,7 +513,7 @@ static void fetch_task(void *param) {
                         DeserializationError err = deserializeJson(doc, buf, total);
                         heap_caps_free(buf);
                         if (!err) {
-                            parse_aircraft_json(doc);
+                            parse_aircraft_json(doc, _aircraft_list, true);
                             _fstats.fetch_ok++;
                             consecutive_fails = 0;
                             Serial.printf("Fetched %d ac, heap=%lu\n",
@@ -486,6 +579,9 @@ static void route_enrich_task(void *param) {
     vTaskDelay(pdMS_TO_TICKS(5000)); // let main fetcher populate list first
 
     while (true) {
+        location_fetch_poll(); // piggyback the active-location aircraft query on this task's own cadence
+        locations_add_poll();  // piggyback "add airport by ICAO" fetches too — see locations.h
+
         // Find next aircraft that has a callsign but no route data
         char callsign[9] = {};
         char icao_hex[7] = {};
@@ -572,7 +668,7 @@ static void route_enrich_task(void *param) {
 
         // Write results back (even empty — marks as "tried" so we don't re-fetch)
         if (_aircraft_list->lock(pdMS_TO_TICKS(100))) {
-            int idx = find_aircraft(icao_hex);
+            int idx = find_aircraft(_aircraft_list, icao_hex);
             if (idx >= 0) {
                 Aircraft &a = _aircraft_list->aircraft[idx];
                 if (origin[0]) strlcpy(a.origin, origin, sizeof(a.origin));
@@ -588,8 +684,25 @@ static void route_enrich_task(void *param) {
     }
 }
 
+void fetcher_set_location_target(float lat, float lon, int radius_nm) {
+    xSemaphoreTake(_loc_target_mutex, portMAX_DELAY);
+    if (lat != _loc_target_lat || lon != _loc_target_lon || radius_nm != _loc_target_radius) {
+        _loc_target_lat = lat;
+        _loc_target_lon = lon;
+        _loc_target_radius = radius_nm;
+        _loc_target_gen++;
+    }
+    xSemaphoreGive(_loc_target_mutex);
+}
+
+AircraftList* fetcher_location_list() {
+    return &_loc_list;
+}
+
 void fetcher_init(AircraftList *list) {
     _aircraft_list = list;
+    _loc_list.init();
+    _loc_target_mutex = xSemaphoreCreateMutex();
     http_mutex_init();
 
     // Only init ONE network stack per boot

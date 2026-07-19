@@ -8,6 +8,7 @@
 #include "../pins_config.h"
 #include "../data/fetcher.h"
 #include "../data/error_log.h"
+#include "../data/locations.h"
 
 #define STATS_W LCD_H_RES
 #define STATS_H (LCD_V_RES - 30)
@@ -17,7 +18,8 @@
 #define SYS_COLOR lv_color_hex(0x44cc88)
 #define WARN_COLOR lv_color_hex(0xccaa00)
 
-static AircraftList *_list = nullptr;
+static AircraftList *_list = nullptr;      // currently effective list
+static AircraftList *_home_list = nullptr; // the list passed in at init
 static lv_obj_t *_container = nullptr;
 
 // Current count
@@ -164,6 +166,7 @@ static int count_lvgl_objects(lv_obj_t *obj) {
 static void refresh_stats(lv_timer_t *t) {
     if (views_get_active_index() != VIEW_STATS) return;
 
+    _list = locations_active_list(_home_list);
     stats_update(_list);
     const SessionStats *s = stats_get();
     const FetcherStats *fs = fetcher_get_stats();
@@ -360,6 +363,7 @@ static void create_section_header(lv_obj_t *parent, const char *text, int x, int
 
 void stats_view_init(lv_obj_t *parent, AircraftList *list) {
     _list = list;
+    _home_list = list;
 
     _container = lv_obj_create(parent);
     lv_obj_set_size(_container, STATS_W, STATS_H);

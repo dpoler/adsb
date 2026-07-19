@@ -5,7 +5,6 @@
 #include "radar_view.h"
 #include "arrivals_view.h"
 #include "stats_view.h"
-#include "aprt_view.h"
 #include "stats.h"
 #include "../pins_config.h"
 #include "../data/storage.h"
@@ -14,7 +13,7 @@
 #include "range.h"
 
 static lv_obj_t *tileview;
-static lv_obj_t *tiles[5];
+static lv_obj_t *tiles[NUM_VIEWS];
 static int _active_index = VIEW_MAP;
 
 // View cycle state — per-view dwell times (ms)
@@ -36,7 +35,7 @@ static bool _cycle_paused = false;
 static void tileview_changed_cb(lv_event_t *e) {
     lv_obj_t *tv = (lv_obj_t *)lv_event_get_target(e);
     lv_obj_t *active = lv_tileview_get_tile_active(tv);
-    for (int i = 0; i < 5; i++) {
+    for (int i = 0; i < NUM_VIEWS; i++) {
         if (tiles[i] == active) {
             _active_index = i;
             status_bar_set_active_dot(i);
@@ -88,7 +87,7 @@ static void cycle_timer_cb(lv_timer_t *t) {
 
     if (now - _last_cycle_time >= dwell) {
         _last_cycle_time = now;
-        int next = (_active_index + 1) % 4;  // cycle only among the 4 main views
+        int next = (_active_index + 1) % NUM_VIEWS;
         if (next == VIEW_MAP) range_cycle();
         // Update state directly — don't rely on VALUE_CHANGED callback
         _active_index = next;
@@ -109,13 +108,15 @@ void views_init(lv_obj_t *parent, AircraftList *list) {
     lv_obj_set_style_bg_color(tileview, lv_color_hex(0x0a0a1a), 0);
     lv_obj_set_style_bg_opa(tileview, LV_OPA_COVER, 0);
 
-    // Create 5 horizontal tiles — all get opaque backgrounds to prevent bleed-through during scroll animation
+    // Create 4 horizontal tiles — all get opaque backgrounds to prevent bleed-through during scroll animation.
+    // Runway diagrams live inside Map view now (see map_view.cpp draw_runways) —
+    // there's no separate APRT tile; which airport's data these show is
+    // controlled by the location picker (see locations.h), not by swiping.
     tiles[VIEW_MAP]     = lv_tileview_add_tile(tileview, 0, 0, LV_DIR_RIGHT);
     tiles[VIEW_RADAR]   = lv_tileview_add_tile(tileview, 1, 0, (lv_dir_t)(LV_DIR_LEFT | LV_DIR_RIGHT));
     tiles[VIEW_ARRIVALS]= lv_tileview_add_tile(tileview, 2, 0, (lv_dir_t)(LV_DIR_LEFT | LV_DIR_RIGHT));
-    tiles[VIEW_STATS]   = lv_tileview_add_tile(tileview, 3, 0, (lv_dir_t)(LV_DIR_LEFT | LV_DIR_RIGHT));
-    tiles[VIEW_APRT]    = lv_tileview_add_tile(tileview, 4, 0, LV_DIR_LEFT);
-    for (int i = 0; i < 5; i++) {
+    tiles[VIEW_STATS]   = lv_tileview_add_tile(tileview, 3, 0, LV_DIR_LEFT);
+    for (int i = 0; i < NUM_VIEWS; i++) {
         lv_obj_set_style_bg_color(tiles[i], lv_color_hex(0x0a0a1a), 0);
         lv_obj_set_style_bg_opa(tiles[i], LV_OPA_COVER, 0);
         lv_obj_set_style_pad_all(tiles[i], 0, 0);
@@ -131,7 +132,6 @@ void views_init(lv_obj_t *parent, AircraftList *list) {
     radar_view_init(tiles[VIEW_RADAR], list);
     arrivals_view_init(tiles[VIEW_ARRIVALS], list);
     stats_view_init(tiles[VIEW_STATS], list);
-    aprt_view_init(tiles[VIEW_APRT]);
 
     // Start auto-cycle timer (respects g_config.cycle_enabled)
     _last_cycle_time = millis();
@@ -153,7 +153,7 @@ lv_obj_t *views_get_tileview() {
 }
 
 void views_switch_to(int idx) {
-    if (idx < 0 || idx > 4) return;
+    if (idx < 0 || idx >= NUM_VIEWS) return;
     _active_index = idx;
     status_bar_set_active_dot(idx);
     if (idx != VIEW_ARRIVALS) lv_obj_invalidate(tiles[idx]);
@@ -187,7 +187,7 @@ void views_attach_swipe(lv_obj_t *obj) {
         if (abs(dx) >= SWIPE_THRESHOLD && abs(dx) > abs(dy) * 2) {
             _swipe_active = true;
             int v = views_get_active_index();
-            views_switch_to((dx < 0) ? (v + 1) % 5 : (v + 4) % 5);
+            views_switch_to((dx < 0) ? (v + 1) % NUM_VIEWS : (v + NUM_VIEWS - 1) % NUM_VIEWS);
         }
     }, LV_EVENT_PRESSING, nullptr);
 }

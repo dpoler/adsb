@@ -4,6 +4,7 @@
 #include "map_view.h"
 #include "../data/aircraft.h"
 #include "../data/storage.h"
+#include "../data/locations.h"
 #include "../pins_config.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
@@ -157,11 +158,14 @@ void alerts_show(AlertType type, const char *title, const char *detail,
         _current_hex[0] = '\0';
     }
 
-    // Military/emergency alerts: 10s timeout, optionally switch to map view
+    // Military/emergency alerts: 10s timeout, optionally switch to map view.
+    // Skip the auto-switch if the user's deliberately looking at a saved
+    // (non-home) airport — a home-area alert isn't relevant to what they're
+    // watching and shouldn't yank them back to Home.
     if (type == ALERT_MILITARY || type == ALERT_EMERGENCY) {
         timeout_ms = 10000;
 
-        if (g_config.alert_autofocus) {
+        if (g_config.alert_autofocus && locations_active_index() == -1) {
             views_pause_cycle();
             lv_tileview_set_tile_by_index(views_get_tileview(), VIEW_MAP, 0, LV_ANIM_OFF);
         }

@@ -9,8 +9,10 @@
 #include <cstdlib>
 #include "range.h"
 #include "../data/storage.h"
+#include "../data/locations.h"
 
-static AircraftList *_list = nullptr;
+static AircraftList *_list = nullptr;      // currently effective list
+static AircraftList *_home_list = nullptr; // the list passed in at init
 static lv_obj_t *_board_container = nullptr;
 static lv_obj_t *_range_label = nullptr;
 
@@ -163,6 +165,14 @@ static int sort_compare(const void *a, const void *b) {
 // Update board data from aircraft list
 static void update_board(lv_timer_t *t) {
     if (views_get_active_index() != VIEW_ARRIVALS) return;
+
+    _list = locations_active_list(_home_list);
+    float center_lat, center_lon;
+    if (!locations_get_active_coords(&center_lat, &center_lon, nullptr)) {
+        center_lat = g_config.home_lat;
+        center_lon = g_config.home_lon;
+    }
+
     if (!_list->lock(pdMS_TO_TICKS(5))) return;
 
     // Build sortable index of aircraft with valid positions
@@ -172,7 +182,7 @@ static void update_board(lv_timer_t *t) {
         Aircraft &ac = _list->aircraft[i];
         if (ac.lat == 0 && ac.lon == 0) continue;
         if (g_config.hide_ground && ac.on_ground) continue;
-        float d = MapProjection::distance_nm(g_config.home_lat, g_config.home_lon, ac.lat, ac.lon);
+        float d = MapProjection::distance_nm(center_lat, center_lon, ac.lat, ac.lon);
         if (d > range_get_nm()) continue;
         entries[n_entries].index = i;
         entries[n_entries].dist_nm = d;
@@ -296,6 +306,7 @@ static void header_label_click_cb(lv_event_t *e) {
 
 void arrivals_view_init(lv_obj_t *parent, AircraftList *list) {
     _list = list;
+    _home_list = list;
 
     // Make tile fully opaque so radar/map don't bleed through
     lv_obj_set_style_pad_all(parent, 0, 0);

@@ -14,6 +14,7 @@ static lv_obj_t *_ta_ssid = nullptr;
 static lv_obj_t *_ta_pass = nullptr;
 static lv_obj_t *_ta_lat = nullptr;
 static lv_obj_t *_ta_lon = nullptr;
+static lv_obj_t *_ta_airportdb_token = nullptr;
 
 // Controls
 static lv_obj_t *_ta_radius[4] = {nullptr, nullptr, nullptr, nullptr};
@@ -109,6 +110,9 @@ static void save_and_close(lv_event_t *e) {
     strncpy(_cfg.wifi_pass, lv_textarea_get_text(_ta_pass), sizeof(_cfg.wifi_pass) - 1);
     _cfg.wifi_pass[sizeof(_cfg.wifi_pass) - 1] = '\0';
     for (char *p = _cfg.wifi_pass; *p; p++) if (*p == '\r' || *p == '\n') *p = '\0';
+    strncpy(_cfg.airportdb_token, lv_textarea_get_text(_ta_airportdb_token), sizeof(_cfg.airportdb_token) - 1);
+    _cfg.airportdb_token[sizeof(_cfg.airportdb_token) - 1] = '\0';
+    for (char *p = _cfg.airportdb_token; *p; p++) if (*p == '\r' || *p == '\n') *p = '\0';
     _cfg.home_lat = atof(lv_textarea_get_text(_ta_lat));
     _cfg.home_lon = atof(lv_textarea_get_text(_ta_lon));
     for (int i = 0; i < 4; i++) {
@@ -329,6 +333,10 @@ void settings_init(lv_obj_t *parent) {
     create_label(_panel, "Hide Ground AC", rx, 330);
     _sw_hide_ground = create_switch(_panel, rx + 140, 328, _cfg.hide_ground);
 
+    // airportdb.io token — used by the location picker's "Add airport" flow
+    create_label(_panel, "Airport DB Token (airportdb.io)", rx, 364);
+    _ta_airportdb_token = create_textarea(_panel, "token", _cfg.airportdb_token, rx, 382);
+
     // === Save button (centered at bottom) ===
     lv_obj_t *save_btn = lv_button_create(_panel);
     lv_obj_set_size(save_btn, 120, 40);
@@ -362,6 +370,7 @@ void settings_show() {
     lv_textarea_set_text(_ta_ssid, _cfg.wifi_ssid);
     lv_textarea_set_text(_ta_pass, _cfg.wifi_pass);
     lv_textarea_set_password_mode(_ta_pass, true);
+    lv_textarea_set_text(_ta_airportdb_token, _cfg.airportdb_token);
     lv_label_set_text(lv_obj_get_child(_btn_show_pass, 0), LV_SYMBOL_EYE_OPEN);
 
     char lat_str[16], lon_str[16];

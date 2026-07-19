@@ -3,6 +3,7 @@
 struct UserConfig {
     char wifi_ssid[33];
     char wifi_pass[65];
+    char airportdb_token[160]; // free token from airportdb.io — observed ~97 chars, sized with margin
     float home_lat;
     float home_lon;
     int radius_nm;           // API query radius = max(radius_presets), set on save

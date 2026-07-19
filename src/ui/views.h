@@ -2,12 +2,13 @@
 #include "lvgl.h"
 #include "../data/aircraft.h"
 
-// View indices
+// View indices — runway diagrams live inside Map view (see map_view.cpp),
+// driven by the location picker rather than being a swipeable tile of its own.
 #define VIEW_MAP      0
 #define VIEW_RADAR    1
 #define VIEW_ARRIVALS 2
 #define VIEW_STATS    3
-#define VIEW_APRT     4
+#define NUM_VIEWS     4
 
 // Initialize the tileview with all view containers
 void views_init(lv_obj_t *parent, AircraftList *list);

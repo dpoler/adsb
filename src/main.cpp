@@ -10,6 +10,7 @@
 #include "data/aircraft.h"
 #include "data/fetcher.h"
 #include "ui/status_bar.h"
+#include "ui/location_picker.h"
 #include "ui/views.h"
 #include "ui/detail_card.h"
 #include "ui/alerts.h"
@@ -22,6 +23,8 @@
 #include "data/storage.h"
 #include "data/error_log.h"
 #include "data/enrichment.h"
+#include "data/locations.h"
+#include "data/serial_config.h"
 
 // Global touch state — read by view timers to defer heavy rendering during interaction
 volatile bool touch_active = false;
@@ -132,6 +135,7 @@ void setup() {
 
     // Load config before UI so views init with the correct range
     g_config = storage_load_config();
+    locations_init();
 
     // Create UI — LVGL must be fully set up before background tasks
     lv_obj_t *screen = lv_screen_active();
@@ -148,6 +152,11 @@ void setup() {
     range_set_default(g_config.radius_nm);
     views_init(screen, &aircraft_list);
     Serial.println("views OK");
+
+    // Must come after views_init — the tileview is created there, and as a
+    // later sibling on `screen` it would otherwise render on top of (and
+    // hide) this button.
+    location_picker_init(screen);
 
     Serial.println("detail_card_init...");
     detail_card_init(screen);
@@ -172,8 +181,10 @@ void setup() {
         g_config = *cfg;
         range_set_levels(cfg->radius_presets, 4);
         if (presets_changed) range_set_default(cfg->radius_nm);
-        map_view_center_on(cfg->home_lat, cfg->home_lon);
-        radar_view_set_home(cfg->home_lat, cfg->home_lon);
+        if (locations_active_index() == -1) { // don't yank the view off a saved airport
+            map_view_center_on(cfg->home_lat, cfg->home_lon);
+            radar_view_set_home(cfg->home_lat, cfg->home_lon);
+        }
     });
 
     // On first boot (no credentials in NVS), open settings automatically
@@ -199,6 +210,7 @@ void setup() {
 
 void loop() {
     lv_timer_handler();
+    serial_config_poll();
 
     // Heap monitor — log every 10s for crash diagnosis
     static uint32_t last_heap_log = 0;

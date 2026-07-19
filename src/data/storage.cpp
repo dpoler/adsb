@@ -11,6 +11,7 @@ UserConfig storage_load_config() {
     // Compiled defaults — credentials and location are blank until set via settings
     cfg.wifi_ssid[0] = '\0';
     cfg.wifi_pass[0] = '\0';
+    cfg.airportdb_token[0] = '\0';
     cfg.home_lat = 0.0f;
     cfg.home_lon = 0.0f;
     cfg.radius_nm = 50;
@@ -42,6 +43,8 @@ UserConfig storage_load_config() {
         strlcpy(cfg.wifi_ssid, _prefs.getString("ssid", cfg.wifi_ssid).c_str(), sizeof(cfg.wifi_ssid));
     if (_prefs.isKey("pass"))
         strlcpy(cfg.wifi_pass, _prefs.getString("pass", cfg.wifi_pass).c_str(), sizeof(cfg.wifi_pass));
+    if (_prefs.isKey("apt_tok"))
+        strlcpy(cfg.airportdb_token, _prefs.getString("apt_tok", cfg.airportdb_token).c_str(), sizeof(cfg.airportdb_token));
     cfg.home_lat = _prefs.getFloat("lat", cfg.home_lat);
     cfg.home_lon = _prefs.getFloat("lon", cfg.home_lon);
     cfg.radius_nm = _prefs.getInt("radius", cfg.radius_nm);
@@ -75,6 +78,7 @@ void storage_save_config(const UserConfig &cfg) {
 
     _prefs.putString("ssid", cfg.wifi_ssid);
     _prefs.putString("pass", cfg.wifi_pass);
+    _prefs.putString("apt_tok", cfg.airportdb_token);
     _prefs.putFloat("lat", cfg.home_lat);
     _prefs.putFloat("lon", cfg.home_lon);
     _prefs.putInt("radius", cfg.radius_nm);
