@@ -15,6 +15,7 @@
 #define LV_USE_LOG 0
 
 /* Fonts - enable the ones we need */
+#define LV_FONT_MONTSERRAT_10 1
 #define LV_FONT_MONTSERRAT_14 1
 #define LV_FONT_MONTSERRAT_16 1
 #define LV_FONT_MONTSERRAT_20 1

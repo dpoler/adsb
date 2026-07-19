@@ -35,12 +35,23 @@ static lv_obj_t *_canvas = nullptr;
 static lv_obj_t *_range_label = nullptr;
 static MapProjection _proj;
 
-// Labels shown only when runways are wide enough to be unambiguous, and only
-// where they don't overlap an already-placed label (see LabelRectSet)
-#define RUNWAY_LABEL_MIN_PX  30     // minimum rendered runway length to show designators
-#define RUNWAY_LABEL_OFFSET  14     // px beyond endpoint along runway axis
-#define RUNWAY_LBL_W         40
-#define RUNWAY_LBL_H         18
+// Runway label visibility depends on zoom tier (tuned against real airports —
+// KDEN's dense runway cluster vs. EGLL's wide-spaced pair vs. KAPA's mixed
+// lengths all needed hand-testing, a fixed rule alone couldn't get it right):
+//   > 10nm: no labels at all — too little screen space to label without
+//           just being clutter on top of the runway lines themselves.
+//   <= 10nm: labels in the smaller 10pt font — more room to fit a whole
+//            airport's layout without overlap.
+//   <= 8nm: labels in the larger, more readable 14pt font — enough room at
+//           this zoom to afford it.
+#define RUNWAY_LABEL_SHOW_MAX_NM  10.0f
+#define RUNWAY_LABEL_BIG_FONT_NM  8.0f
+#define RUNWAY_LABEL_MIN_PX_FLOOR 12     // below this the line itself is basically a dot
+#define RUNWAY_LABEL_OFFSET       14     // px beyond endpoint along runway axis
+#define RUNWAY_LBL_W_SMALL        30     // lv_font_montserrat_10
+#define RUNWAY_LBL_H_SMALL        14
+#define RUNWAY_LBL_W_BIG          40     // lv_font_montserrat_14
+#define RUNWAY_LBL_H_BIG          18
 #define COLOR_RUNWAY         lv_color_hex(0x006600)
 #define COLOR_RUNWAY_LABEL   lv_color_hex(0x33cc66)
 
@@ -291,30 +302,42 @@ static void draw_home_marker(lv_layer_t *layer) {
     lv_draw_line(layer, &line_dsc);
 }
 
-// Tracks label bounding boxes already placed this frame (across every saved
-// airport being drawn) so labels that would overlap too much simply don't
-// draw — radius-independent, since range presets are user-adjustable and a
-// fixed zoom cutoff can't tell a widely-spaced airport (fine even zoomed out)
-// from a tightly-clustered one (busy even zoomed in). A little overlap is
-// still readable (e.g. KAPA's 35L/35R), so only reject past ~20% of a
-// label's own area covered by one already placed.
+// Tracks label bounding boxes already drawn this frame (across every saved
+// airport being drawn), so a new label can check whether its default spot
+// is already busy and try nudging further out instead. Labels always draw —
+// dropping a label entirely (whole-airport or individual) turned out to be
+// more confusing than a bit of visual overlap in the rare cases that remain.
 #define MAX_LABEL_RECTS (MAX_LOCATIONS * MAX_RUNWAYS * 2)
 #define LABEL_OVERLAP_LIMIT_PCT 20
+
+// True if the overlap between a and b exceeds LABEL_OVERLAP_LIMIT_PCT of a's
+// own area. Not symmetric by construction (a is "the label being tested"),
+// but a and b are always same-sized label boxes in practice.
+static bool label_areas_overlap_too_much(const lv_area_t &a, const lv_area_t &b) {
+    int32_t a_area = (int32_t)(a.x2 - a.x1) * (int32_t)(a.y2 - a.y1);
+    int32_t ix1 = a.x1 > b.x1 ? a.x1 : b.x1;
+    int32_t iy1 = a.y1 > b.y1 ? a.y1 : b.y1;
+    int32_t ix2 = a.x2 < b.x2 ? a.x2 : b.x2;
+    int32_t iy2 = a.y2 < b.y2 ? a.y2 : b.y2;
+    if (ix2 <= ix1 || iy2 <= iy1) return false; // no intersection at all
+    int32_t overlap_area = (ix2 - ix1) * (iy2 - iy1);
+    return overlap_area * 100 > a_area * LABEL_OVERLAP_LIMIT_PCT;
+}
+
+static lv_area_t label_area_at(int px, int py, int w, int h) {
+    return {
+        (lv_coord_t)(px - w / 2), (lv_coord_t)(py - h / 2),
+        (lv_coord_t)(px + w / 2), (lv_coord_t)(py + h / 2)
+    };
+}
+
 struct LabelRectSet {
     lv_area_t rects[MAX_LABEL_RECTS];
     int count = 0;
 
     bool overlaps(const lv_area_t &a) const {
-        int32_t a_area = (int32_t)(a.x2 - a.x1) * (int32_t)(a.y2 - a.y1);
         for (int i = 0; i < count; i++) {
-            int32_t ix1 = a.x1 > rects[i].x1 ? a.x1 : rects[i].x1;
-            int32_t iy1 = a.y1 > rects[i].y1 ? a.y1 : rects[i].y1;
-            int32_t ix2 = a.x2 < rects[i].x2 ? a.x2 : rects[i].x2;
-            int32_t iy2 = a.y2 < rects[i].y2 ? a.y2 : rects[i].y2;
-            if (ix2 <= ix1 || iy2 <= iy1) continue; // no intersection at all
-
-            int32_t overlap_area = (ix2 - ix1) * (iy2 - iy1);
-            if (overlap_area * 100 > a_area * LABEL_OVERLAP_LIMIT_PCT) return true;
+            if (label_areas_overlap_too_much(a, rects[i])) return true;
         }
         return false;
     }
@@ -324,35 +347,53 @@ struct LabelRectSet {
     }
 };
 
-// Draws a runway-end label unless it would overlap one already placed this
-// frame. Returns true if it drew (caller doesn't otherwise need this).
-static bool draw_runway_label(lv_layer_t *layer, lv_draw_label_dsc_t *lbl,
-                               LabelRectSet &placed, int px, int py, const char *text) {
-    lv_area_t area = {
-        (lv_coord_t)(px - RUNWAY_LBL_W / 2), (lv_coord_t)(py - RUNWAY_LBL_H / 2),
-        (lv_coord_t)(px + RUNWAY_LBL_W / 2), (lv_coord_t)(py + RUNWAY_LBL_H / 2)
-    };
-    if (placed.overlaps(area)) return false;
+// Places a runway-end label near (ex,ey), offset along (dirx,diry) (the unit
+// vector pointing away from the runway, out past its end). If the default
+// spot overlaps something already drawn, tries pushing further out along the
+// same line once; if that's clearer, uses it — otherwise just draws at the
+// original spot and accepts the overlap. Always draws.
+static void place_runway_label(lv_layer_t *layer, lv_draw_label_dsc_t *lbl, LabelRectSet &placed,
+                                int ex, int ey, float dirx, float diry, const char *text, int w, int h) {
+    lv_area_t area = label_area_at(ex + (int)(dirx * RUNWAY_LABEL_OFFSET),
+                                    ey + (int)(diry * RUNWAY_LABEL_OFFSET), w, h);
+    if (placed.overlaps(area)) {
+        lv_area_t farther = label_area_at(ex + (int)(dirx * RUNWAY_LABEL_OFFSET * 2),
+                                           ey + (int)(diry * RUNWAY_LABEL_OFFSET * 2), w, h);
+        if (!placed.overlaps(farther)) area = farther;
+        // else: no better spot found nearby — draw at the original spot anyway
+    }
 
     lbl->text = text;
     lv_draw_label(layer, lbl, &area);
     placed.add(area);
-    return true;
 }
 
-// Draws runway lines (+ designators, where they fit without overlapping) for
-// one Location.
-static void draw_runways_for(lv_layer_t *layer, const Location *loc, LabelRectSet &placed) {
+// Draws runway lines (always) and designators (zoom-tiered — see the
+// RUNWAY_LABEL_* constants) for one Location.
+static void draw_runways_for(lv_layer_t *layer, const Location *loc, LabelRectSet &placed, float radius_nm) {
     lv_draw_line_dsc_t line;
     lv_draw_line_dsc_init(&line);
     line.color = COLOR_RUNWAY;
     line.width = 1;
 
+    bool show_labels = (radius_nm <= RUNWAY_LABEL_SHOW_MAX_NM);
+    bool big_font = (radius_nm <= RUNWAY_LABEL_BIG_FONT_NM);
+    int lbl_w = big_font ? RUNWAY_LBL_W_BIG : RUNWAY_LBL_W_SMALL;
+    int lbl_h = big_font ? RUNWAY_LBL_H_BIG : RUNWAY_LBL_H_SMALL;
+    // Tying this to the label's own width (30-40px) was still too
+    // conservative — real short runways (e.g. KAPA's 10/28, ~4800ft) render
+    // to ~22px at 10nm and got excluded. This floor exists only to skip
+    // genuinely degenerate near-zero-length renders, not to require the
+    // runway be wider than its own label.
+    int min_px = RUNWAY_LABEL_MIN_PX_FLOOR;
+
     lv_draw_label_dsc_t lbl;
-    lv_draw_label_dsc_init(&lbl);
-    lbl.color = COLOR_RUNWAY_LABEL;
-    lbl.font = &lv_font_montserrat_14;
-    lbl.align = LV_TEXT_ALIGN_CENTER;
+    if (show_labels) {
+        lv_draw_label_dsc_init(&lbl);
+        lbl.color = COLOR_RUNWAY_LABEL;
+        lbl.font = big_font ? &lv_font_montserrat_14 : &lv_font_montserrat_10;
+        lbl.align = LV_TEXT_ALIGN_CENTER;
+    }
 
     for (int i = 0; i < loc->runway_count; i++) {
         const LocRunway &rw = loc->runways[i];
@@ -364,21 +405,17 @@ static void draw_runways_for(lv_layer_t *layer, const Location *loc, LabelRectSe
         line.p2 = {(lv_value_precise_t)x2, (lv_value_precise_t)y2};
         lv_draw_line(layer, &line);
 
+        if (!show_labels) continue;
+
         float vx = (float)(x2 - x1);
         float vy = (float)(y2 - y1);
         float vlen = sqrtf(vx * vx + vy * vy);
-        if (vlen < RUNWAY_LABEL_MIN_PX) continue;
+        if (vlen < min_px) continue;
         vx /= vlen;
         vy /= vlen;
 
-        draw_runway_label(layer, &lbl, placed,
-            x1 + (int)(-vx * RUNWAY_LABEL_OFFSET),
-            y1 + (int)(-vy * RUNWAY_LABEL_OFFSET),
-            rw.le_id);
-        draw_runway_label(layer, &lbl, placed,
-            x2 + (int)(vx * RUNWAY_LABEL_OFFSET),
-            y2 + (int)(vy * RUNWAY_LABEL_OFFSET),
-            rw.he_id);
+        place_runway_label(layer, &lbl, placed, x1, y1, -vx, -vy, rw.le_id, lbl_w, lbl_h);
+        place_runway_label(layer, &lbl, placed, x2, y2, vx, vy, rw.he_id, lbl_w, lbl_h);
     }
 }
 
@@ -419,7 +456,12 @@ static void draw_airport_glyph(lv_layer_t *layer, int sx, int sy, const char *ic
 // it's not simply invisible. Airports you haven't saved are handled
 // separately by draw_static_airport_glyphs().
 static void draw_saved_airports(lv_layer_t *layer) {
-    LabelRectSet placed; // shared across every saved airport this frame
+    // static, not stack-local: this runs inside LVGL's render/draw callback
+    // chain on loopTask (~8KB stack) — a ~3.75KB struct as a stack variable
+    // there caused a deterministic "Stack protection fault" on every boot.
+    static LabelRectSet placed;
+    placed.count = 0; // reset each frame; .rects entries beyond count are never read
+    float radius_nm = range_get_nm();
     int n = locations_count();
     for (int i = 0; i < n; i++) {
         const Location *loc = locations_get(i);
@@ -428,7 +470,7 @@ static void draw_saved_airports(lv_layer_t *layer) {
         if (!_proj.to_screen(loc->lat, loc->lon, sx, sy)) continue;
 
         if (loc->runway_count > 0) {
-            draw_runways_for(layer, loc, placed);
+            draw_runways_for(layer, loc, placed, radius_nm);
         } else {
             draw_airport_glyph(layer, sx, sy, loc->icao);
         }
