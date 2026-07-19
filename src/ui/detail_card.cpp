@@ -3,6 +3,7 @@
 #include "geo.h"
 #include "../data/storage.h"
 #include "../data/enrichment.h"
+#include "../data/airlines.h"
 #include "../pins_config.h"
 
 static lv_obj_t *_card = nullptr;
@@ -334,7 +335,16 @@ void detail_card_show(const Aircraft *ac) {
     }
 
     // === IDENTITY ===
-    lv_label_set_text(_operator_label, ac->owner_op[0] ? ac->owner_op : "");
+    // Airline name from callsign prefix (airlines.h) preferred — more
+    // consistently present than the ADS-B owner_op field, and reflects who's
+    // actually operating this flight (relevant for leased/wet-leased
+    // aircraft where owner_op may show a leasing company instead).
+    const AirlineEntry *airline = airline_lookup(ac->callsign);
+    if (airline) {
+        lv_label_set_text(_operator_label, airline->name);
+    } else {
+        lv_label_set_text(_operator_label, ac->owner_op[0] ? ac->owner_op : "");
+    }
 
     // Type description
     if (ac->desc[0]) {

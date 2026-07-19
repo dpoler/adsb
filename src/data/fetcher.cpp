@@ -4,6 +4,7 @@
 #include "../pins_config.h"
 #include "../data/storage.h"
 #include "../data/locations.h"
+#include "../data/airlines.h"
 #include "../ui/alerts.h"
 #if defined(USE_ETHERNET)
 #include <ETH.h>
@@ -462,6 +463,10 @@ static void fetch_task(void *param) {
     update_ip_addr();
     const char *net_name = (_active_net == NET_ETHERNET) ? "Ethernet" : "WiFi";
     Serial.printf("\n%s connected, IP: %s\n", net_name, _fstats.ip_addr);
+
+    // One-time load of the airline code->name lookup table (see airlines.h) —
+    // done here, once, on this task's existing stack rather than a new task.
+    airlines_load();
 
     // Build API URL
     char url[128];
