@@ -450,10 +450,11 @@ static void draw_airport_glyph(lv_layer_t *layer, int sx, int sy, const char *ic
     lv_draw_label(layer, &lbl, &area);
 }
 
-// Draws every *saved* airport currently on screen — not just the active
-// selection — with full runway geometry (we already have it from
-// airportdb.io). Anything without runway data falls back to a small glyph so
-// it's not simply invisible. Airports you haven't saved are handled
+// Draws every *saved* airport currently on screen. Only the currently
+// active/selected location gets full runway geometry — other saved airports
+// that happen to be in view are shown as a plain glyph, otherwise a KDEN-vs-
+// KAPA situation draws two full runway diagrams at once and it's not obvious
+// which one is actually "here". Airports you haven't saved are handled
 // separately by draw_static_airport_glyphs().
 static void draw_saved_airports(lv_layer_t *layer) {
     // static, not stack-local: this runs inside LVGL's render/draw callback
@@ -462,6 +463,7 @@ static void draw_saved_airports(lv_layer_t *layer) {
     static LabelRectSet placed;
     placed.count = 0; // reset each frame; .rects entries beyond count are never read
     float radius_nm = range_get_nm();
+    int active = locations_active_index();
     int n = locations_count();
     for (int i = 0; i < n; i++) {
         const Location *loc = locations_get(i);
@@ -469,7 +471,7 @@ static void draw_saved_airports(lv_layer_t *layer) {
         int sx, sy;
         if (!_proj.to_screen(loc->lat, loc->lon, sx, sy)) continue;
 
-        if (loc->runway_count > 0) {
+        if (loc->runway_count > 0 && i == active) {
             draw_runways_for(layer, loc, placed, radius_nm);
         } else {
             draw_airport_glyph(layer, sx, sy, loc->icao);
