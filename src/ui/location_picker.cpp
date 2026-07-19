@@ -51,7 +51,15 @@ static void update_picker_label() {
 
 static void close_overlay() {
     if (_overlay) {
-        lv_obj_delete(_overlay); // deletes _panel and _keyboard too (children)
+        // Deferred, not lv_obj_delete(): this often runs from a CLICKED event
+        // on one of _overlay's own descendants (e.g. select_location() via
+        // add_row_click_cb) -- deleting an ancestor of the widget still
+        // dispatching its own event is undefined behavior in LVGL and was the
+        // root cause of touch going unresponsive / changes seeming to need an
+        // extra refresh to "take". Hide immediately so nothing lingers
+        // visually; the actual delete happens safely on the next tick.
+        lv_obj_add_flag(_overlay, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_delete_async(_overlay); // deletes _panel and _keyboard too (children)
         _overlay = nullptr;
         _panel = nullptr;
         _keyboard = nullptr;
@@ -112,12 +120,29 @@ static void add_row_click_cb(lv_event_t *e) {
 static void remove_row_click_cb(lv_event_t *e) {
     int idx = (int)(intptr_t)lv_event_get_user_data(e);
     locations_remove(idx);
+    update_picker_label(); // reflect a reset-to-Home immediately if the active airport was removed
     build_list_view(); // rebuild panel in place
 }
 
+// Note: build_list_view()/build_add_view() are also called from click events
+// on a widget that is a *descendant* of _panel (e.g. remove_row_click_cb, the
+// "Add airport" row, the add-view's "Cancel" button) -- deleting _panel
+// synchronously in that case is undefined behavior in LVGL (the click event
+// is still dispatching on a now-freed object) and previously manifested as
+// touch becoming unresponsive after removing a saved airport. Hide + defer
+// instead of an immediate lv_obj_delete().
 static void build_list_view() {
-    if (_panel) lv_obj_delete(_panel);
+    if (_panel) {
+        lv_obj_add_flag(_panel, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_delete_async(_panel);
+    }
     if (_keyboard) lv_obj_add_flag(_keyboard, LV_OBJ_FLAG_HIDDEN);
+    // These only exist while _panel is the "add airport" view -- clear them so
+    // a fetch result that arrives after Cancel (tapped while a fetch was still
+    // in flight) doesn't write into the now-deleted widgets.
+    _add_status_lbl = nullptr;
+    _add_fetch_btn = nullptr;
+    _add_ta = nullptr;
 
     int rows = 1 + locations_count() + 1; // Home + saved + "Add" row
     int panel_h = rows * ROW_H + 8;
@@ -234,7 +259,10 @@ static void fetch_btn_click_cb(lv_event_t *e) {
 }
 
 static void build_add_view() {
-    if (_panel) lv_obj_delete(_panel);
+    if (_panel) {
+        lv_obj_add_flag(_panel, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_delete_async(_panel); // see build_list_view() -- called from a click event on a descendant of _panel (the "Add airport" row)
+    }
 
     _panel = lv_obj_create(_overlay);
     lv_obj_set_size(_panel, PANEL_W, 200);
