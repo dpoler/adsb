@@ -6,7 +6,6 @@ struct AircraftEnrichment {
     char photo_photographer[48];
     char manufacturer[32];
     char model[48];
-    char owner[48];
     char registered_country[24];
     char engine_type[24];
     uint8_t engine_count;

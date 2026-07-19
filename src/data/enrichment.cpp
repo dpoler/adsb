@@ -112,7 +112,6 @@ static void fetch_task(void *param) {
                 JsonObject ac = doc["response"]["aircraft"];
                 strlcpy(entry->manufacturer, ac["manufacturer"] | "", sizeof(entry->manufacturer));
                 strlcpy(entry->model, ac["type"] | "", sizeof(entry->model));
-                strlcpy(entry->owner, ac["registered_owner"] | "", sizeof(entry->owner));
                 strlcpy(entry->registered_country, ac["registered_owner_country_name"] | "",
                         sizeof(entry->registered_country));
                 entry->engine_count = ac["engine_count"] | 0;

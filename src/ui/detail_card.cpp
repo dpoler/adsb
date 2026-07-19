@@ -123,15 +123,13 @@ static void on_enrichment_ready(AircraftEnrichment *data) {
         lv_label_set_text(_type_label, buf);
     }
 
-    // Aircraft details line: manufacturer | owner | country year | engines
+    // Aircraft details line: manufacturer | country year | engines
+    // (registered owner dropped -- for airline aircraft it's almost always
+    // just the same airline name already shown above, from airline_lookup())
     char detail[160] = {};
     int pos = 0;
     if (data->manufacturer[0]) {
         pos += snprintf(detail + pos, sizeof(detail) - pos, "%s", data->manufacturer);
-    }
-    if (data->owner[0]) {
-        if (pos > 0) pos += snprintf(detail + pos, sizeof(detail) - pos, "  |  ");
-        pos += snprintf(detail + pos, sizeof(detail) - pos, "%s", data->owner);
     }
     if (data->registered_country[0]) {
         if (pos > 0) pos += snprintf(detail + pos, sizeof(detail) - pos, "  |  ");
