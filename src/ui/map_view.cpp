@@ -292,21 +292,29 @@ static void draw_home_marker(lv_layer_t *layer) {
 }
 
 // Tracks label bounding boxes already placed this frame (across every saved
-// airport being drawn) so labels that would overlap simply don't draw —
-// radius-independent, since range presets are user-adjustable and a fixed
-// zoom cutoff can't tell a widely-spaced airport (fine even zoomed out) from
-// a tightly-clustered one (busy even zoomed in).
+// airport being drawn) so labels that would overlap too much simply don't
+// draw — radius-independent, since range presets are user-adjustable and a
+// fixed zoom cutoff can't tell a widely-spaced airport (fine even zoomed out)
+// from a tightly-clustered one (busy even zoomed in). A little overlap is
+// still readable (e.g. KAPA's 35L/35R), so only reject past ~20% of a
+// label's own area covered by one already placed.
 #define MAX_LABEL_RECTS (MAX_LOCATIONS * MAX_RUNWAYS * 2)
+#define LABEL_OVERLAP_LIMIT_PCT 20
 struct LabelRectSet {
     lv_area_t rects[MAX_LABEL_RECTS];
     int count = 0;
 
     bool overlaps(const lv_area_t &a) const {
+        int32_t a_area = (int32_t)(a.x2 - a.x1) * (int32_t)(a.y2 - a.y1);
         for (int i = 0; i < count; i++) {
-            if (a.x1 < rects[i].x2 && a.x2 > rects[i].x1 &&
-                a.y1 < rects[i].y2 && a.y2 > rects[i].y1) {
-                return true;
-            }
+            int32_t ix1 = a.x1 > rects[i].x1 ? a.x1 : rects[i].x1;
+            int32_t iy1 = a.y1 > rects[i].y1 ? a.y1 : rects[i].y1;
+            int32_t ix2 = a.x2 < rects[i].x2 ? a.x2 : rects[i].x2;
+            int32_t iy2 = a.y2 < rects[i].y2 ? a.y2 : rects[i].y2;
+            if (ix2 <= ix1 || iy2 <= iy1) continue; // no intersection at all
+
+            int32_t overlap_area = (ix2 - ix1) * (iy2 - iy1);
+            if (overlap_area * 100 > a_area * LABEL_OVERLAP_LIMIT_PCT) return true;
         }
         return false;
     }
