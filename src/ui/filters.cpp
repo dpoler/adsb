@@ -10,7 +10,7 @@ const FilterDef filter_defs[NUM_FILTERS] = {
     {"EMG",  "EMERGENCY",   lv_color_hex(0xff3333)},
     {"HELI", "HELICOPTERS", lv_color_hex(0xdd44ff)}, // matches COLOR_HELI_CAT (geo.h) -- the actual on-screen heli icon color
     {"GA",   "GENERAL AVIATION", lv_color_hex(0x44dd44)},
-    {"VERT", "ASCENDING/DESCENDING", lv_color_hex(0x22ccdd)},
+    {"VERT", "ASCENDING/DESCENDING", lv_color_hex(0xffee44)},
 };
 
 static unsigned _active_mask = 0;
