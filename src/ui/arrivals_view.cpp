@@ -72,7 +72,7 @@ static Column columns[] = {
     {"DIST",   450, true},
     {"HDG",    550, false},
     {"STATUS", 630, false},
-    {"FPM",    740, false}, // ~110px after STATUS -- wider gap than most (80-100px) since STATUS's own text ("DESCEND", 7 chars) needs more room than short fields like HDG
+    {"FPM",    770, false}, // split the difference between 800 (too far) and 740 (too close)
 };
 #define NUM_COLS 8
 
