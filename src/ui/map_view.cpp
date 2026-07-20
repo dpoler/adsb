@@ -678,7 +678,7 @@ static void draw_icon_legend(lv_layer_t *layer) {
 
 // Draw active filter indicator on canvas
 static void draw_filter_label(lv_layer_t *layer) {
-    char buf[96];
+    char buf[128];
     lv_color_t color;
     if (filter_label_text(buf, sizeof(buf), &color) == 0) return;
 

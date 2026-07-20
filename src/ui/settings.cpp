@@ -14,6 +14,7 @@ static lv_obj_t *_ta_ssid = nullptr;
 static lv_obj_t *_ta_pass = nullptr;
 static lv_obj_t *_ta_lat = nullptr;
 static lv_obj_t *_ta_lon = nullptr;
+static lv_obj_t *_ta_elev = nullptr;
 static lv_obj_t *_ta_airportdb_token = nullptr;
 
 // Controls
@@ -115,6 +116,7 @@ static void save_and_close(lv_event_t *e) {
     for (char *p = _cfg.airportdb_token; *p; p++) if (*p == '\r' || *p == '\n') *p = '\0';
     _cfg.home_lat = atof(lv_textarea_get_text(_ta_lat));
     _cfg.home_lon = atof(lv_textarea_get_text(_ta_lon));
+    _cfg.home_elevation_ft = atoi(lv_textarea_get_text(_ta_elev));
     for (int i = 0; i < 4; i++) {
         int v = atoi(lv_textarea_get_text(_ta_radius[i]));
         if (v < 1) v = 1;
@@ -337,6 +339,14 @@ void settings_init(lv_obj_t *parent) {
     create_label(_panel, "Airport DB Token (airportdb.io)", rx, 364);
     _ta_airportdb_token = create_textarea(_panel, "token", _cfg.airportdb_token, rx, 382);
 
+    // Home field elevation — saved Locations get this from airportdb.io
+    // automatically; Home has no such lookup, so it's entered here. Used for
+    // AGL calculations (e.g. the ascending/descending filter).
+    char elev_str[8];
+    snprintf(elev_str, sizeof(elev_str), "%d", _cfg.home_elevation_ft);
+    create_label(_panel, "Home Elevation (ft MSL)", rx, 430);
+    _ta_elev = create_textarea(_panel, "e.g. 5431", elev_str, rx, 448);
+
     // === Save button (centered at bottom) ===
     lv_obj_t *save_btn = lv_button_create(_panel);
     lv_obj_set_size(save_btn, 120, 40);
@@ -373,11 +383,13 @@ void settings_show() {
     lv_textarea_set_text(_ta_airportdb_token, _cfg.airportdb_token);
     lv_label_set_text(lv_obj_get_child(_btn_show_pass, 0), LV_SYMBOL_EYE_OPEN);
 
-    char lat_str[16], lon_str[16];
+    char lat_str[16], lon_str[16], elev_str[8];
     snprintf(lat_str, sizeof(lat_str), "%.4f", _cfg.home_lat);
     snprintf(lon_str, sizeof(lon_str), "%.4f", _cfg.home_lon);
+    snprintf(elev_str, sizeof(elev_str), "%d", _cfg.home_elevation_ft);
     lv_textarea_set_text(_ta_lat, lat_str);
     lv_textarea_set_text(_ta_lon, lon_str);
+    lv_textarea_set_text(_ta_elev, elev_str);
 
     for (int i = 0; i < 4; i++) {
         char rbuf[8];

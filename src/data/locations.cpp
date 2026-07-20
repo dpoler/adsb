@@ -122,7 +122,7 @@ bool locations_get_active_coords(float *lat, float *lon, int *elevation_ft) {
     if (_active_index == -1) {
         if (lat) *lat = g_config.home_lat;
         if (lon) *lon = g_config.home_lon;
-        if (elevation_ft) *elevation_ft = 0;
+        if (elevation_ft) *elevation_ft = g_config.home_elevation_ft;
         return true;
     }
     const Location *loc = locations_get(_active_index);

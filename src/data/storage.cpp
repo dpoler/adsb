@@ -14,6 +14,7 @@ UserConfig storage_load_config() {
     cfg.airportdb_token[0] = '\0';
     cfg.home_lat = 0.0f;
     cfg.home_lon = 0.0f;
+    cfg.home_elevation_ft = 0;
     cfg.radius_nm = 50;
     cfg.radius_presets[0] = 5;
     cfg.radius_presets[1] = 10;
@@ -47,6 +48,7 @@ UserConfig storage_load_config() {
         strlcpy(cfg.airportdb_token, _prefs.getString("apt_tok", cfg.airportdb_token).c_str(), sizeof(cfg.airportdb_token));
     cfg.home_lat = _prefs.getFloat("lat", cfg.home_lat);
     cfg.home_lon = _prefs.getFloat("lon", cfg.home_lon);
+    cfg.home_elevation_ft = _prefs.getInt("home_elev", cfg.home_elevation_ft);
     cfg.radius_nm = _prefs.getInt("radius", cfg.radius_nm);
     cfg.radius_presets[0] = _prefs.getInt("rad0", cfg.radius_presets[0]);
     cfg.radius_presets[1] = _prefs.getInt("rad1", cfg.radius_presets[1]);
@@ -81,6 +83,7 @@ void storage_save_config(const UserConfig &cfg) {
     _prefs.putString("apt_tok", cfg.airportdb_token);
     _prefs.putFloat("lat", cfg.home_lat);
     _prefs.putFloat("lon", cfg.home_lon);
+    _prefs.putInt("home_elev", cfg.home_elevation_ft);
     _prefs.putInt("radius", cfg.radius_nm);
     _prefs.putInt("rad0", cfg.radius_presets[0]);
     _prefs.putInt("rad1", cfg.radius_presets[1]);

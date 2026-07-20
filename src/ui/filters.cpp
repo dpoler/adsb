@@ -1,5 +1,6 @@
 #include "filters.h"
 #include "aircraft_icons.h" // classify_icon() -- reused below for FILT_GA
+#include "../data/locations.h" // locations_get_active_coords() -- reused below for FILT_VERT's AGL check
 #include <cstring>
 #include <cstdio>
 
@@ -9,6 +10,7 @@ const FilterDef filter_defs[NUM_FILTERS] = {
     {"EMG",  "EMERGENCY",   lv_color_hex(0xff3333)},
     {"HELI", "HELICOPTERS", lv_color_hex(0xdd44ff)}, // matches COLOR_HELI_CAT (geo.h) -- the actual on-screen heli icon color
     {"GA",   "GENERAL AVIATION", lv_color_hex(0x44dd44)},
+    {"VERT", "ASCENDING/DESCENDING", lv_color_hex(0x22ccdd)},
 };
 
 static unsigned _active_mask = 0;
@@ -76,6 +78,22 @@ bool aircraft_passes_filter(const Aircraft &ac) {
         // Reuses the same classification the map icon/legend already use
         // (aircraft_icons.h) rather than a separate GA heuristic.
         return true;
+    if ((_active_mask & (1u << FILT_VERT)) && !ac.on_ground) {
+        // "Landing/departing" traffic, not just anything with a nonzero
+        // vertical rate -- a cruise-altitude step-climb would otherwise
+        // match too. Same AGL-ceiling approach as dpoler/FlightRadarCYD's
+        // acColor() (10,000ft AGL there, using its own per-location
+        // elevation setting); reuses this project's existing +-300fpm
+        // climb/descend convention (detail_card.cpp, radar_view.cpp,
+        // arrivals_view.cpp's status_from_vert_rate()) instead of that
+        // project's +-2m/s.
+        const int32_t AGL_CEILING_FT = 10000;
+        int elev_ft = 0;
+        locations_get_active_coords(nullptr, nullptr, &elev_ft);
+        int32_t agl = ac.altitude - elev_ft;
+        if (agl <= AGL_CEILING_FT && (ac.vert_rate > 300 || ac.vert_rate < -300))
+            return true;
+    }
 
     return false;
 }

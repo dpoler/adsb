@@ -6,6 +6,10 @@ struct UserConfig {
     char airportdb_token[160]; // free token from airportdb.io — observed ~97 chars, sized with margin
     float home_lat;
     float home_lon;
+    int home_elevation_ft;   // user-entered field elevation at Home, ft MSL --
+                              // used for AGL calculations (e.g. the ascending/
+                              // descending filter). Saved Locations get this
+                              // from airportdb.io instead (Location::elevation_ft).
     int radius_nm;           // API query radius = max(radius_presets), set on save
     int radius_presets[4];  // user-configurable zoom levels, sorted ascending
     bool use_metric;
