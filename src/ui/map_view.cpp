@@ -494,17 +494,12 @@ static bool is_saved_icao(const char *icao) {
 // Anything already drawn with runways by draw_saved_airports() is skipped
 // here to avoid a double marker.
 static void draw_static_airport_glyphs(lv_layer_t *layer) {
-    float radius_nm = range_get_nm();
-    // 10nm was too tight — nearby GA relievers (e.g. 15-25nm out) were never
-    // visible at any zoom: too far off-screen at 10nm, but suppressed by this
-    // gate at any wider zoom that would've put them on screen. 25nm covers
-    // the common "nearby metro-area GA airports" case without cluttering
-    // very wide (50nm+) views with every medium airport in range.
-    bool show_medium = (radius_nm <= 25.0f);
-
+    // Medium airports used to be suppressed above 25nm to avoid cluttering
+    // wide views, but that meant real nearby fields (e.g. KBJC/KBKF around
+    // KDEN, KTEB/KFRG/KMMU around KJFK) were invisible at 50nm even though
+    // they were on screen. Show large+medium at any zoom now.
     for (int i = 0; i < AIRPORTS_DB_COUNT; i++) {
         const StaticAirport &ap = airports_db[i];
-        if (!ap.large && !show_medium) continue;
 
         int sx, sy;
         if (!_proj.to_screen(ap.lat, ap.lon, sx, sy)) continue;
