@@ -2,12 +2,14 @@
 #include "lvgl.h"
 #include "../data/aircraft.h"
 
-// Filter indices — bit positions in the active-filter bitmask
+// Filter indices — bit positions in the active-filter bitmask. Order here is
+// also the on-screen button order (top to bottom): COM, GA, HELI, MIL, EMG,
+// then VERT below the divider.
 #define FILT_AIRLINE   0
-#define FILT_MILITARY  1
-#define FILT_EMERGENCY 2
-#define FILT_HELI      3
-#define FILT_GA        4
+#define FILT_GA        1
+#define FILT_HELI      2
+#define FILT_MILITARY  3
+#define FILT_EMERGENCY 4
 #define FILT_VERT      5
 #define NUM_FILTERS    6
 
