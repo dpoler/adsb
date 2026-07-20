@@ -481,12 +481,6 @@ static void fetch_task(void *param) {
     // done here, once, on this task's existing stack rather than a new task.
     airlines_load();
 
-    // Build API URL
-    char url[128];
-    snprintf(url, sizeof(url), "https://api.adsb.lol/v2/point/%.4f/%.4f/%d",
-             g_config.home_lat, g_config.home_lon, g_config.radius_nm);
-    Serial.printf("ADS-B API URL: %s\n", url);
-
     // Main fetch loop
     int consecutive_fails = 0;
     while (true) {
@@ -497,6 +491,15 @@ static void fetch_task(void *param) {
             // else re-populates the real address after a reconnect.
             update_ip_addr();
             if (http_mutex_acquire(pdMS_TO_TICKS(15000))) {
+                // Built fresh every poll rather than once before this loop
+                // started -- otherwise a Home lat/lon or radius change in
+                // Settings would re-center the map/radar views instantly
+                // (see map_view_center_on()/radar_view_set_home() in
+                // settings_set_change_callback) while the actual ADS-B query
+                // kept silently hitting the old location/radius until reboot.
+                char url[128];
+                snprintf(url, sizeof(url), "https://api.adsb.lol/v2/point/%.4f/%.4f/%d",
+                         g_config.home_lat, g_config.home_lon, g_config.radius_nm);
                 HTTPClient http;
                 http.begin(url);
                 http.setTimeout(10000);
