@@ -267,7 +267,7 @@ static void update_board(lv_timer_t *t) {
         strlcpy(_rows[row].icao_hex, ac.icao_hex, sizeof(_rows[row].icao_hex));
 
         // Format each column
-        char flight[9], type[5], alt[5], spd[4], dist[5], hdg[4], status[8];
+        char flight[9], type[5], alt[5], spd[4], dist[5], hdg[4], status[16];
         snprintf(flight, sizeof(flight), "%-8s", ac.callsign[0] ? ac.callsign : ac.icao_hex);
         snprintf(type, sizeof(type), "%-4s", ac.type_code);
 
@@ -279,7 +279,21 @@ static void update_board(lv_timer_t *t) {
         if (dist_nm >= 99.95f) snprintf(dist, sizeof(dist), "%4.0f", dist_nm);
         else snprintf(dist, sizeof(dist), "%4.1f", dist_nm);
         snprintf(hdg, sizeof(hdg), "%03d", ac.heading);
-        snprintf(status, sizeof(status), "%-7s", status_from_vert_rate(ac.vert_rate, ac.on_ground));
+
+        // Append the numeric rate to the CLIMB/DESCEND/CRUISE/GROUND word --
+        // vert_rate_valid gate matters here for the same reason it does for
+        // FILT_VERT (filters.cpp): the feed doesn't report baro_rate every
+        // cycle, and a missing reading defaults to 0 in the parser, which
+        // would otherwise misleadingly print "+0" instead of admitting the
+        // data just isn't fresh this cycle.
+        const char *status_word = status_from_vert_rate(ac.vert_rate, ac.on_ground);
+        if (ac.on_ground) {
+            snprintf(status, sizeof(status), "%-7s", status_word);
+        } else if (ac.vert_rate_valid) {
+            snprintf(status, sizeof(status), "%-7s%+5d", status_word, ac.vert_rate);
+        } else {
+            snprintf(status, sizeof(status), "%-7s  N/A", status_word);
+        }
 
         const char *texts[] = {flight, type, alt, spd, dist, hdg, status};
 
