@@ -178,6 +178,7 @@ struct ParsedEntry {
     float lat, lon;
     int32_t altitude;
     int16_t speed, heading, vert_rate;
+    bool vert_rate_valid; // false when the source JSON simply omitted baro_rate this cycle -- not the same as a confirmed 0fpm/level reading
     uint16_t squawk;
     bool on_ground;
     float mach;
@@ -202,6 +203,7 @@ static void apply_parsed(Aircraft &a, const ParsedEntry &p, bool is_new) {
     a.speed = p.speed;
     a.heading = p.heading;
     a.vert_rate = p.vert_rate;
+    a.vert_rate_valid = p.vert_rate_valid;
     a.squawk = p.squawk;
     a.on_ground = p.on_ground;
     a.mach = p.mach;
@@ -258,6 +260,7 @@ static void parse_aircraft_json(JsonDocument &doc, AircraftList *list, bool do_a
         p.altitude = obj["alt_baro"].is<int>() ? obj["alt_baro"].as<int>() : 0;
         p.speed = (int16_t)(obj["gs"] | 0.0f);
         p.heading = (int16_t)(obj["track"] | 0.0f);
+        p.vert_rate_valid = !obj["baro_rate"].isNull();
         p.vert_rate = (int16_t)(obj["baro_rate"] | 0.0f);
         p.squawk = strtoul(obj["squawk"] | "0", nullptr, 10);
         p.on_ground = obj["alt_baro"] == "ground";

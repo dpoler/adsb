@@ -29,6 +29,9 @@ struct Aircraft {
     int16_t speed;          // knots
     int16_t heading;        // degrees 0-359
     int16_t vert_rate;      // ft/min
+    bool vert_rate_valid;   // false when the feed simply didn't report a
+                             // vertical rate this cycle -- not the same as a
+                             // confirmed 0fpm/level reading
     uint16_t squawk;
     bool on_ground;
     bool is_military;

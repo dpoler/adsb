@@ -78,7 +78,7 @@ bool aircraft_passes_filter(const Aircraft &ac) {
         // Reuses the same classification the map icon/legend already use
         // (aircraft_icons.h) rather than a separate GA heuristic.
         return true;
-    if ((_active_mask & (1u << FILT_VERT)) && !ac.on_ground) {
+    if ((_active_mask & (1u << FILT_VERT)) && !ac.on_ground && ac.vert_rate_valid) {
         // "Landing/departing" traffic, not just anything with a nonzero
         // vertical rate -- a cruise-altitude step-climb would otherwise
         // match too. Same AGL-ceiling approach as dpoler/FlightRadarCYD's
@@ -87,6 +87,13 @@ bool aircraft_passes_filter(const Aircraft &ac) {
         // climb/descend convention (detail_card.cpp, radar_view.cpp,
         // arrivals_view.cpp's status_from_vert_rate()) instead of that
         // project's +-2m/s.
+        //
+        // vert_rate_valid gate matters: the feed doesn't report baro_rate
+        // every cycle for every aircraft, and the parser defaults a missing
+        // value to 0 (see fetcher.cpp) -- without this check, an aircraft
+        // that's genuinely climbing/descending but whose most recent update
+        // simply omitted baro_rate would read as "level" and drop out of
+        // this filter, even though nothing about its actual flight changed.
         const int32_t AGL_CEILING_FT = 10000;
         int elev_ft = 0;
         locations_get_active_coords(nullptr, nullptr, &elev_ft);
