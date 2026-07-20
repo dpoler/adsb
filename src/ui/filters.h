@@ -2,8 +2,7 @@
 #include "lvgl.h"
 #include "../data/aircraft.h"
 
-// Filter indices — single-select, -1 = show all
-#define FILT_NONE     -1
+// Filter indices — bit positions in the active-filter bitmask
 #define FILT_AIRLINE   0
 #define FILT_MILITARY  1
 #define FILT_EMERGENCY 2
@@ -20,10 +19,18 @@ struct FilterDef {
 // Shared filter definitions (no per-view LVGL pointers — views manage their own buttons)
 extern const FilterDef filter_defs[NUM_FILTERS];
 
-// Global active filter state (persists across view switches)
-int  filter_get_active();
-void filter_set_active(int idx);
-void filter_toggle(int idx);  // toggle: if active==idx, set NONE; else set idx
+// Global active filter state (bitmask, persists across view switches). Any
+// number of filters can be active at once -- an aircraft passes if it
+// matches ANY active filter (OR); with none active, everything passes.
+unsigned filter_get_active();       // bitmask, e.g. (1u<<FILT_GA)|(1u<<FILT_HELI)
+void     filter_toggle(int idx);    // flips bit idx
+
+// Builds "FILTER: X" / "FILTER: X + Y" for whichever filters are currently
+// active into buf, and sets *color to the first active filter's color (a
+// single accent color, not blended across multiple active filters). Returns
+// the number of active filters -- 0 means none active, caller should skip
+// drawing the label in that case.
+int filter_label_text(char *buf, size_t buf_size, lv_color_t *color);
 
 // Filter match logic
 bool aircraft_passes_filter(const Aircraft &ac);

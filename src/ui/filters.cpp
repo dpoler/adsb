@@ -1,6 +1,7 @@
 #include "filters.h"
 #include "aircraft_icons.h" // classify_icon() -- reused below for FILT_GA
 #include <cstring>
+#include <cstdio>
 
 const FilterDef filter_defs[NUM_FILTERS] = {
     {"COM",  "COMMERCIAL",  lv_color_hex(0x4488ff)},
@@ -10,16 +11,28 @@ const FilterDef filter_defs[NUM_FILTERS] = {
     {"GA",   "GENERAL AVIATION", lv_color_hex(0x44dd44)},
 };
 
-static int _active_filter = FILT_NONE;
+static unsigned _active_mask = 0;
 
-int filter_get_active() { return _active_filter; }
-void filter_set_active(int idx) { _active_filter = idx; }
+unsigned filter_get_active() { return _active_mask; }
 
 void filter_toggle(int idx) {
-    if (_active_filter == idx)
-        _active_filter = FILT_NONE;
-    else
-        _active_filter = idx;
+    _active_mask ^= (1u << idx);
+}
+
+int filter_label_text(char *buf, size_t buf_size, lv_color_t *color) {
+    if (buf_size) buf[0] = '\0';
+    size_t pos = 0;
+    int count = 0;
+    for (int i = 0; i < NUM_FILTERS; i++) {
+        if (!(_active_mask & (1u << i))) continue;
+        if (count == 0 && color) *color = filter_defs[i].color;
+        const char *sep = (count == 0) ? "FILTER: " : " + ";
+        int n = snprintf(buf + pos, pos < buf_size ? buf_size - pos : 0,
+                          "%s%s", sep, filter_defs[i].full_name);
+        if (n > 0) pos += (size_t)n;
+        count++;
+    }
+    return count;
 }
 
 bool is_airline_callsign(const char *cs) {
@@ -46,25 +59,23 @@ bool is_heli_type(const char *t) {
 }
 
 bool aircraft_passes_filter(const Aircraft &ac) {
-    if (_active_filter == FILT_NONE) return true;
+    if (_active_mask == 0) return true;
 
-    switch (_active_filter) {
-        case FILT_AIRLINE:
-            if (is_airline_callsign(ac.callsign)) return true;
-            if (ac.category[0] == 'A' && ac.category[1] >= '3') return true;
-            return false;
-        case FILT_MILITARY:
-            return ac.is_military;
-        case FILT_EMERGENCY:
-            return ac.is_emergency;
-        case FILT_HELI:
-            if (ac.category[0] == 'A' && ac.category[1] == '7') return true;
-            if (ac.type_code[0] && is_heli_type(ac.type_code)) return true;
-            return false;
-        case FILT_GA:
-            // Reuses the same classification the map icon/legend already use
-            // (aircraft_icons.h) rather than a separate GA heuristic.
-            return classify_icon(ac) == ICON_GA;
-    }
-    return true;
+    if ((_active_mask & (1u << FILT_AIRLINE)) &&
+        (is_airline_callsign(ac.callsign) || (ac.category[0] == 'A' && ac.category[1] >= '3')))
+        return true;
+    if ((_active_mask & (1u << FILT_MILITARY)) && ac.is_military)
+        return true;
+    if ((_active_mask & (1u << FILT_EMERGENCY)) && ac.is_emergency)
+        return true;
+    if ((_active_mask & (1u << FILT_HELI)) &&
+        ((ac.category[0] == 'A' && ac.category[1] == '7') ||
+         (ac.type_code[0] && is_heli_type(ac.type_code))))
+        return true;
+    if ((_active_mask & (1u << FILT_GA)) && classify_icon(ac) == ICON_GA)
+        // Reuses the same classification the map icon/legend already use
+        // (aircraft_icons.h) rather than a separate GA heuristic.
+        return true;
+
+    return false;
 }

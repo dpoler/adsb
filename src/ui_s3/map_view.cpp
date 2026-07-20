@@ -157,9 +157,9 @@ static void overlay_create(lv_obj_t *parent) {
 }
 
 static void update_filter_visuals() {
-    int active = filter_get_active();
+    unsigned active = filter_get_active();
     for (int i = 0; i < NUM_FILTERS; i++) {
-        if (active == i) {
+        if (active & (1u << i)) {
             lv_obj_set_style_bg_color(_filter_btns[i], filter_defs[i].color, 0);
             lv_obj_set_style_bg_opa(_filter_btns[i], LV_OPA_COVER, 0);
             lv_obj_set_style_border_color(_filter_btns[i], lv_color_hex(0xffffff), 0);
@@ -423,13 +423,12 @@ static void draw_aircraft(lv_layer_t *layer) {
 }
 
 static void draw_filter_label(lv_layer_t *layer) {
-    int af = filter_get_active();
-    if (af == FILT_NONE) return;
-    char buf[32];
-    snprintf(buf, sizeof(buf), "FILTER: %s", filter_defs[af].full_name);
+    char buf[96];
+    lv_color_t color;
+    if (filter_label_text(buf, sizeof(buf), &color) == 0) return;
     lv_draw_label_dsc_t lbl;
     lv_draw_label_dsc_init(&lbl);
-    lbl.color = filter_defs[af].color;
+    lbl.color = color;
     lbl.font = &lv_font_montserrat_14;
     lbl.opa = LV_OPA_COVER;
     lbl.text = buf;
@@ -549,10 +548,10 @@ void map_view_init(lv_obj_t *parent, AircraftList *list) {
 
     overlay_create(parent);
 
-    static int _last_synced_filter = FILT_NONE;
+    static unsigned _last_synced_filter = ~0u; // impossible bitmask value, forces sync on first tick
     static float _last_range = -1;
     lv_timer_create([](lv_timer_t *t) {
-        int af = filter_get_active();
+        unsigned af = filter_get_active();
         if (af != _last_synced_filter) {
             _last_synced_filter = af;
             update_filter_visuals();
