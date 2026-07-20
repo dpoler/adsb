@@ -102,7 +102,6 @@ void locations_init() {
     memset(_locations, 0, sizeof(_locations));
 
     size_t blob_len = _prefs.getBytesLength("locs");
-    Serial.printf("[locations] init: stored count=%d, blob_len=%u\n", _count, (unsigned)blob_len);
     if (_count > 0 && blob_len > 0) {
         uint8_t *buf = (uint8_t *)heap_caps_malloc(blob_len, MALLOC_CAP_SPIRAM);
         int parsed = 0;
@@ -131,17 +130,11 @@ void locations_init() {
         }
         if (parsed != _count) {
             // Inconsistent/corrupt/old-format blob -- don't trust partial data.
-            Serial.printf("[locations] init: parsed only %d of %d claimed locations -- resetting to empty\n", parsed, _count);
             _count = 0;
             memset(_locations, 0, sizeof(_locations));
-        } else {
-            for (int i = 0; i < _count; i++) {
-                Serial.printf("[locations] init: loaded[%d] = %s, runway_count=%d\n", i, _locations[i].icao, _locations[i].runway_count);
-            }
         }
     } else if (_count > 0) {
         // count > 0 but no blob at all -- inconsistent, reset.
-        Serial.printf("[locations] init: count=%d but no blob -- resetting to empty\n", _count);
         _count = 0;
     }
 
@@ -237,13 +230,8 @@ bool locations_add_from_icao(const char *icao, char *err, size_t err_size) {
     for (char *p = icao_upper; *p; p++) *p = toupper((unsigned char)*p);
 
     // Check for an existing entry first — avoid duplicate network calls.
-    Serial.printf("[locations] add %s: _count=%d before dedup check\n", icao_upper, _count);
     for (int i = 0; i < _count; i++) {
-        Serial.printf("[locations]   existing[%d] = %s\n", i, _locations[i].icao);
-        if (strcmp(_locations[i].icao, icao_upper) == 0) {
-            Serial.printf("[locations] %s already in saved list -- skipping fetch, existing (possibly stale) entry kept\n", icao_upper);
-            return fail("already saved");
-        }
+        if (strcmp(_locations[i].icao, icao_upper) == 0) return fail("already saved");
     }
 
     if (!http_mutex_acquire(pdMS_TO_TICKS(15000))) return fail("network busy, try again");
@@ -298,28 +286,24 @@ bool locations_add_from_icao(const char *icao, char *err, size_t err_size) {
                         loc.elevation_ft = doc["elevation_ft"].as<int>();
 
                         JsonArray rwys = doc["runways"].as<JsonArray>();
-                        Serial.printf("[locations] %s: %d raw runway entries in response\n", icao_upper, (int)rwys.size());
                         for (JsonObject r : rwys) {
-                            const char *le_id_dbg = r["le_ident"] | "?";
-                            const char *he_id_dbg = r["he_ident"] | "?";
-                            const char *closed_raw = r["closed"] | "?";
-                            int closed_parsed = r["closed"].as<int>();
-                            if (loc.runway_count >= MAX_RUNWAYS) {
-                                Serial.printf("[locations]   %s/%s: SKIP (MAX_RUNWAYS cap hit)\n", le_id_dbg, he_id_dbg);
-                                break;
-                            }
+                            if (loc.runway_count >= MAX_RUNWAYS) break;
                             // Skip decommissioned runways -- OurAirports (which
                             // airportdb.io wraps) tracks this per-runway (e.g.
-                            // KORD's old diagonals 14L/32R, 15/33, 18/36 are
-                            // marked closed=1 despite still having valid
-                            // coordinates) and without this check we'd draw
-                            // them as if active, and -- since MAX_RUNWAYS is a
-                            // fixed cap -- potentially crowd out a real active
-                            // runway that arrives later in the array.
-                            if (closed_parsed == 1) {
-                                Serial.printf("[locations]   %s/%s: closed=\"%s\" (parsed %d) -- SKIPPED\n", le_id_dbg, he_id_dbg, closed_raw, closed_parsed);
-                                continue;
-                            }
+                            // KORD's old diagonals 14L/32R and 18/36 are marked
+                            // closed=1 despite still having valid coordinates)
+                            // and without this check we'd draw them as if
+                            // active, and -- since MAX_RUNWAYS is a fixed cap --
+                            // potentially crowd out a real active runway that
+                            // arrives later in the array. Confirmed via a live
+                            // airportdb.io response (2026-07) that this field
+                            // and its string "0"/"1" encoding are handled
+                            // correctly; airportdb.io's own data can still lag
+                            // OurAirports for very recent runway changes (see
+                            // project_location_architecture memory) -- that's
+                            // a data-source staleness limitation, not a parsing
+                            // bug, and isn't fixable here.
+                            if (r["closed"].as<int>() == 1) continue;
                             float le_lat = r["le_latitude_deg"].as<float>();
                             float le_lon = r["le_longitude_deg"].as<float>();
                             float he_lat = r["he_latitude_deg"].as<float>();
@@ -327,10 +311,7 @@ bool locations_add_from_icao(const char *icao, char *err, size_t err_size) {
                             // Skip runways OurAirports has no threshold coordinates for —
                             // draw only what we can actually place on the map.
                             if ((le_lat == 0.0f && le_lon == 0.0f) ||
-                                (he_lat == 0.0f && he_lon == 0.0f)) {
-                                Serial.printf("[locations]   %s/%s: closed=\"%s\" (parsed %d) -- KEPT but zero coords, SKIPPED\n", le_id_dbg, he_id_dbg, closed_raw, closed_parsed);
-                                continue;
-                            }
+                                (he_lat == 0.0f && he_lon == 0.0f)) continue;
 
                             LocRunway &rw = loc.runways[loc.runway_count++];
                             rw.le_lat = le_lat;
@@ -339,9 +320,7 @@ bool locations_add_from_icao(const char *icao, char *err, size_t err_size) {
                             rw.he_lon = he_lon;
                             strlcpy(rw.le_id, r["le_ident"] | "", sizeof(rw.le_id));
                             strlcpy(rw.he_id, r["he_ident"] | "", sizeof(rw.he_id));
-                            Serial.printf("[locations]   %s/%s: closed=\"%s\" (parsed %d) -- KEPT (slot %d)\n", le_id_dbg, he_id_dbg, closed_raw, closed_parsed, loc.runway_count - 1);
                         }
-                        Serial.printf("[locations] %s: final runway_count=%d\n", icao_upper, loc.runway_count);
 
                         _locations[_count++] = loc;
                         save_all();
