@@ -44,10 +44,21 @@ static bool _add_result_ready = false;
 static bool _add_result_ok = false;
 static char _add_result_err[48] = {};
 
+// Writes only the used slots (_count * sizeof(Location)), not the whole
+// fixed-size MAX_LOCATIONS array -- with few saved airports this is a much
+// smaller blocking NVS/flash write (a handful of runways vs. ~3.2KB for the
+// full 15-slot array every time), which showed up as a brief full-screen
+// solid-color flash on this board's LCD panel (a stall long enough to
+// visibly starve the display's refresh; the much smaller UserConfig blob in
+// storage.cpp's writes don't stall long enough to be visible).
 static void save_all() {
     _prefs.begin("adsb_locs", false);
     _prefs.putInt("count", _count);
-    _prefs.putBytes("locs", _locations, sizeof(_locations));
+    if (_count > 0) {
+        _prefs.putBytes("locs", _locations, (size_t)_count * sizeof(Location));
+    } else {
+        _prefs.remove("locs");
+    }
     _prefs.end();
 }
 
@@ -56,9 +67,16 @@ void locations_init() {
     _count = _prefs.getInt("count", 0);
     if (_count < 0) _count = 0;
     if (_count > MAX_LOCATIONS) _count = MAX_LOCATIONS;
+    memset(_locations, 0, sizeof(_locations));
+    // Read into the full-size buffer regardless of _count -- stays compatible
+    // with older saves written before save_all() started trimming the blob to
+    // just the used slots (getBytes fails/returns 0 if the buffer passed in
+    // is smaller than what's actually stored, so this must stay full-size).
+    size_t expect = (size_t)_count * sizeof(Location);
     size_t got = _prefs.getBytes("locs", _locations, sizeof(_locations));
-    if (got != sizeof(_locations)) {
-        // No saved data yet (or size mismatch after a struct change) — start empty.
+    if (got < expect) {
+        // Saved blob is smaller than count claims -- inconsistent, don't
+        // trust partial data.
         _count = 0;
         memset(_locations, 0, sizeof(_locations));
     }
