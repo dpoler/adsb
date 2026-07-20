@@ -481,6 +481,11 @@ static void fetch_task(void *param) {
     int consecutive_fails = 0;
     while (true) {
         if (network_connected()) {
+            // Refresh every tick, not just once at boot -- otherwise a
+            // transient disconnect (which sets ip_addr to "N/A" below) never
+            // gets corrected once the connection recovers, since nothing
+            // else re-populates the real address after a reconnect.
+            update_ip_addr();
             if (http_mutex_acquire(pdMS_TO_TICKS(15000))) {
                 HTTPClient http;
                 http.begin(url);
