@@ -909,6 +909,33 @@ void map_view_init(lv_obj_t *parent, AircraftList *list) {
         lv_obj_invalidate(_canvas);
     }, LV_EVENT_CLICKED, nullptr);
 
+    // Clear trails — one-tap, right edge, in the gap between the filter
+    // button stack and the range label.
+    {
+        lv_obj_t *clr_btn = lv_obj_create(parent);
+        lv_obj_set_size(clr_btn, 64, 40);
+        lv_obj_set_pos(clr_btn, CANVAS_W - 64 - 8, CANVAS_H - 28 - 40 - 20);
+        lv_obj_set_style_bg_color(clr_btn, lv_color_hex(0x0a0a1a), 0);
+        lv_obj_set_style_bg_opa(clr_btn, LV_OPA_70, 0);
+        lv_obj_set_style_border_color(clr_btn, lv_color_hex(0x888899), 0);
+        lv_obj_set_style_border_width(clr_btn, 1, 0);
+        lv_obj_set_style_border_opa(clr_btn, LV_OPA_40, 0);
+        lv_obj_set_style_radius(clr_btn, 6, 0);
+        lv_obj_set_style_pad_all(clr_btn, 0, 0);
+        lv_obj_clear_flag(clr_btn, LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_clear_flag(clr_btn, LV_OBJ_FLAG_SCROLL_CHAIN);
+        lv_obj_add_event_cb(clr_btn, [](lv_event_t *e) {
+            _filter_just_clicked = true; // reuse the same guard -- prevents the zoom-cycle tap handler from also firing
+            aircraft_list_clear_trails(_list);
+            lv_obj_invalidate(_canvas);
+        }, LV_EVENT_CLICKED, nullptr);
+
+        lv_obj_t *clr_lbl = lv_label_create(clr_btn);
+        lv_label_set_text(clr_lbl, LV_SYMBOL_TRASH);
+        lv_obj_set_style_text_color(clr_lbl, lv_color_hex(0x888899), 0);
+        lv_obj_center(clr_lbl);
+    }
+
     // Loading overlay — shown until first aircraft data arrives
     overlay_create(parent);
 
