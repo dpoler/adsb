@@ -60,25 +60,41 @@ bool is_heli_type(const char *t) {
     return false;
 }
 
-bool aircraft_passes_filter(const Aircraft &ac) {
-    if (_active_mask == 0) return true;
+// Filters fall into two independent groups, combined AND-across/OR-within:
+// matching ANY active filter within a group is enough for that group, but
+// a group with no active filters passes automatically -- and both groups
+// must pass. This is what makes e.g. COM+VERT mean "commercial traffic
+// that's ALSO ascending/descending" rather than "commercial traffic OR
+// ascending/descending traffic" -- COM/MIL/EMG/HELI/GA are alternative
+// *categories* (picking several means "show any of these categories"),
+// while VERT is an orthogonal *state* a category filter should narrow, not
+// compete with.
+#define FILTER_CATEGORY_MASK \
+    ((1u << FILT_AIRLINE) | (1u << FILT_MILITARY) | (1u << FILT_EMERGENCY) | \
+     (1u << FILT_HELI) | (1u << FILT_GA))
+#define FILTER_STATE_MASK (1u << FILT_VERT)
 
-    if ((_active_mask & (1u << FILT_AIRLINE)) &&
+static bool passes_category_filters(const Aircraft &ac, unsigned bits) {
+    if ((bits & (1u << FILT_AIRLINE)) &&
         (is_airline_callsign(ac.callsign) || (ac.category[0] == 'A' && ac.category[1] >= '3')))
         return true;
-    if ((_active_mask & (1u << FILT_MILITARY)) && ac.is_military)
+    if ((bits & (1u << FILT_MILITARY)) && ac.is_military)
         return true;
-    if ((_active_mask & (1u << FILT_EMERGENCY)) && ac.is_emergency)
+    if ((bits & (1u << FILT_EMERGENCY)) && ac.is_emergency)
         return true;
-    if ((_active_mask & (1u << FILT_HELI)) &&
+    if ((bits & (1u << FILT_HELI)) &&
         ((ac.category[0] == 'A' && ac.category[1] == '7') ||
          (ac.type_code[0] && is_heli_type(ac.type_code))))
         return true;
-    if ((_active_mask & (1u << FILT_GA)) && classify_icon(ac) == ICON_GA)
+    if ((bits & (1u << FILT_GA)) && classify_icon(ac) == ICON_GA)
         // Reuses the same classification the map icon/legend already use
         // (aircraft_icons.h) rather than a separate GA heuristic.
         return true;
-    if ((_active_mask & (1u << FILT_VERT)) && !ac.on_ground && ac.vert_rate_valid) {
+    return false;
+}
+
+static bool passes_state_filters(const Aircraft &ac, unsigned bits) {
+    if ((bits & (1u << FILT_VERT)) && !ac.on_ground && ac.vert_rate_valid) {
         // "Landing/departing" traffic, not just anything with a nonzero
         // vertical rate -- a cruise-altitude step-climb would otherwise
         // match too. Same AGL-ceiling approach as dpoler/FlightRadarCYD's
@@ -101,6 +117,14 @@ bool aircraft_passes_filter(const Aircraft &ac) {
         if (agl <= AGL_CEILING_FT && (ac.vert_rate > 300 || ac.vert_rate < -300))
             return true;
     }
-
     return false;
+}
+
+bool aircraft_passes_filter(const Aircraft &ac) {
+    unsigned category_bits = _active_mask & FILTER_CATEGORY_MASK;
+    unsigned state_bits = _active_mask & FILTER_STATE_MASK;
+
+    if (category_bits && !passes_category_filters(ac, category_bits)) return false;
+    if (state_bits && !passes_state_filters(ac, state_bits)) return false;
+    return true;
 }
