@@ -84,6 +84,13 @@ static BoardRow _rows[MAX_ROWS];
 static lv_obj_t *_header_labels[NUM_COLS];
 static lv_obj_t *_title_label = nullptr;
 
+static const char *active_location_label() {
+    int idx = locations_active_index();
+    if (idx == -1) return "HOME";
+    const Location *loc = locations_get(idx);
+    return (loc && loc->icao[0]) ? loc->icao : "?";
+}
+
 static const char *status_from_vert_rate(int16_t vr, bool on_ground) {
     if (on_ground) return "GROUND ";
     if (vr > 300) return "CLIMB  ";
@@ -91,9 +98,27 @@ static const char *status_from_vert_rate(int16_t vr, bool on_ground) {
     return "CRUISE ";
 }
 
+// Alternating row backgrounds -- a solid wall of CELL_TEXT yellow with no
+// row separation was hard to scan; zebra-striping breaks it up without
+// touching the text color itself.
+#define ROW_BG_EVEN lv_color_hex(0x0c0c0c) // matches BOARD_BG
+#define ROW_BG_ODD  lv_color_hex(0x1a1a1a)
+
 static void init_rows(lv_obj_t *parent) {
     for (int row = 0; row < MAX_ROWS; row++) {
         int y = HEADER_H + row * ROW_H + 4;
+
+        lv_obj_t *bg = lv_obj_create(parent);
+        lv_obj_set_size(bg, BOARD_W, ROW_H);
+        lv_obj_set_pos(bg, 0, HEADER_H + row * ROW_H);
+        lv_obj_set_style_bg_color(bg, (row % 2) ? ROW_BG_ODD : ROW_BG_EVEN, 0);
+        lv_obj_set_style_bg_opa(bg, LV_OPA_COVER, 0);
+        lv_obj_set_style_border_width(bg, 0, 0);
+        lv_obj_set_style_radius(bg, 0, 0);
+        lv_obj_set_style_pad_all(bg, 0, 0);
+        lv_obj_clear_flag(bg, LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_clear_flag(bg, LV_OBJ_FLAG_CLICKABLE);
+
         _rows[row].active = false;
         memset(_rows[row].icao_hex, 0, sizeof(_rows[row].icao_hex));
         for (int col = 0; col < NUM_COLS; col++) {
@@ -287,13 +312,16 @@ static void update_board(lv_timer_t *t) {
         }
     }
 
-    // Update title with range-filtered count (and active filters, if any)
+    // Update title with active location, range-filtered count, and active
+    // filters (if any) -- was a fixed "OVERHEAD TRAFFIC" regardless of
+    // location, which read oddly once the location picker existed.
     char filter_buf[128];
+    const char *loc_label = active_location_label();
     if (filter_label_text(filter_buf, sizeof(filter_buf), nullptr) > 0) {
-        lv_label_set_text_fmt(_title_label, "OVERHEAD TRAFFIC  <%s    %d    %s",
-                              range_label(), displayed_count, filter_buf);
+        lv_label_set_text_fmt(_title_label, "%s TRAFFIC  <%s    %d    %s",
+                              loc_label, range_label(), displayed_count, filter_buf);
     } else {
-        lv_label_set_text_fmt(_title_label, "OVERHEAD TRAFFIC  <%s    %d", range_label(), displayed_count);
+        lv_label_set_text_fmt(_title_label, "%s TRAFFIC  <%s    %d", loc_label, range_label(), displayed_count);
     }
     lv_label_set_text(_range_label, range_label());
 

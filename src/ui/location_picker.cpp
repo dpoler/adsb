@@ -328,7 +328,7 @@ static void build_add_view() {
 void location_picker_init(lv_obj_t *screen) {
     _picker_btn = lv_obj_create(screen);
     lv_obj_set_size(_picker_btn, BTN_W, BTN_H);
-    lv_obj_set_pos(_picker_btn, 4, 34); // just under the 30px status bar
+    lv_obj_set_pos(_picker_btn, 4, 32); // centered in the 30px band below the status bar (30 + (30-BTN_H)/2)
     lv_obj_set_style_bg_color(_picker_btn, COLOR_ROW, 0);
     lv_obj_set_style_bg_opa(_picker_btn, LV_OPA_COVER, 0);
     lv_obj_set_style_border_color(_picker_btn, COLOR_ACCENT, 0);
