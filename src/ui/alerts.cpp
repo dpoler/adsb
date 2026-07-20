@@ -20,6 +20,7 @@ static lv_timer_t *_dismiss_timer = nullptr;
 
 // ICAO hex of the currently displayed toast (for tap-to-detail lookup)
 static char _current_hex[7] = {};
+static bool _toast_active = false; // true while a toast is showing/waiting to auto-dismiss
 
 #define TOAST_W 500
 #define TOAST_H 50
@@ -58,6 +59,7 @@ static const char *alert_icon(AlertType type) {
 }
 
 static void dismiss_toast(lv_timer_t *t) {
+    _toast_active = false;
     lv_anim_t a;
     lv_anim_init(&a);
     lv_anim_set_var(&a, _toast);
@@ -75,18 +77,22 @@ static void dismiss_toast(lv_timer_t *t) {
     }
 }
 
-// Drain queue from LVGL timer context
+// Drain queue from LVGL timer context -- at most one alert per tick, and
+// only once the current toast has finished. Draining the whole queue in one
+// synchronous burst (the old behavior) called alerts_show() repeatedly with
+// no render in between, so every queued alert except the last got silently
+// overwritten before it was ever drawn -- e.g. three military aircraft
+// already in view on the first fetch would only ever show the last one.
 static void process_queue(lv_timer_t *t) {
+    if (_toast_active) return;
     if (xSemaphoreTake(_queue_mutex, 0) != pdTRUE) return;
 
-    while (_queue_head != _queue_tail) {
-        PendingAlert &pa = _queue[_queue_tail];
+    if (_queue_head != _queue_tail) {
+        PendingAlert pa = _queue[_queue_tail]; // copy out before releasing the mutex
         _queue_tail = (_queue_tail + 1) % ALERT_QUEUE_SIZE;
-
-        // Release mutex while showing (alerts_show may take time)
         xSemaphoreGive(_queue_mutex);
         alerts_show(pa.type, pa.title, pa.detail, pa.icao_hex);
-        if (xSemaphoreTake(_queue_mutex, 0) != pdTRUE) return;
+        return;
     }
 
     xSemaphoreGive(_queue_mutex);
@@ -146,6 +152,7 @@ void alerts_init(lv_obj_t *parent) {
 
 void alerts_show(AlertType type, const char *title, const char *detail,
                  const char *icao_hex, uint32_t timeout_ms) {
+    _toast_active = true;
     lv_color_t color = alert_color(type);
 
     // Store hex for tap-to-detail

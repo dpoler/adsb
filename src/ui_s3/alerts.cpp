@@ -19,6 +19,7 @@ static lv_obj_t *_toast_icon = nullptr;
 static lv_timer_t *_dismiss_timer = nullptr;
 
 static char _current_hex[7] = {};
+static bool _toast_active = false; // true while a toast is showing/waiting to auto-dismiss
 
 #define TOAST_W 400
 #define TOAST_H 40
@@ -57,6 +58,7 @@ static const char *alert_icon(AlertType type) {
 }
 
 static void dismiss_toast(lv_timer_t *t) {
+    _toast_active = false;
     lv_anim_t a;
     lv_anim_init(&a);
     lv_anim_set_var(&a, _toast);
@@ -74,16 +76,19 @@ static void dismiss_toast(lv_timer_t *t) {
     }
 }
 
+// At most one alert per tick, and only once the current toast has finished
+// -- see the ui/ copy of this file for why draining the whole queue in one
+// synchronous burst silently dropped all but the last queued alert.
 static void process_queue(lv_timer_t *t) {
+    if (_toast_active) return;
     if (xSemaphoreTake(_queue_mutex, 0) != pdTRUE) return;
 
-    while (_queue_head != _queue_tail) {
-        PendingAlert &pa = _queue[_queue_tail];
+    if (_queue_head != _queue_tail) {
+        PendingAlert pa = _queue[_queue_tail];
         _queue_tail = (_queue_tail + 1) % ALERT_QUEUE_SIZE;
-
         xSemaphoreGive(_queue_mutex);
         alerts_show(pa.type, pa.title, pa.detail, pa.icao_hex);
-        if (xSemaphoreTake(_queue_mutex, 0) != pdTRUE) return;
+        return;
     }
 
     xSemaphoreGive(_queue_mutex);
@@ -143,6 +148,7 @@ void alerts_init(lv_obj_t *parent) {
 
 void alerts_show(AlertType type, const char *title, const char *detail,
                  const char *icao_hex, uint32_t timeout_ms) {
+    _toast_active = true;
     lv_color_t color = alert_color(type);
 
     if (icao_hex && icao_hex[0]) {
