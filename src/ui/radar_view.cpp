@@ -17,6 +17,11 @@ static lv_obj_t *_range_label = nullptr;
 
 static float _sweep_angle = 0.0f; // current sweep angle in degrees
 static uint32_t _last_sweep_ms = 0;
+// Per-view "clear trails" cutoff -- Map and Radar share the same underlying
+// Aircraft/TrailPoint data, so clearing trails must not mutate that shared
+// data (it would clear both views at once). Instead each view independently
+// stops drawing any trail point older than its own cutoff.
+static uint32_t _trails_cleared_at = 0;
 
 #define RADAR_W LCD_H_RES
 #define RADAR_H (LCD_V_RES - 30)
@@ -209,6 +214,7 @@ static void draw_blips(lv_layer_t *layer) {
             lv_draw_rect_dsc_init(&tdot);
             tdot.radius = 1;
             for (int t = start; t < ac.trail_count; t++) {
+                if (ac.trail[t].timestamp < _trails_cleared_at) continue;
                 int tx, ty;
                 if (to_radar_screen(ac.trail[t].lat, ac.trail[t].lon, tx, ty)) {
                     tdot.bg_color = altitude_color(ac.trail[t].alt);
@@ -533,7 +539,7 @@ void radar_view_init(lv_obj_t *parent, AircraftList *list) {
         lv_obj_clear_flag(clr_btn, LV_OBJ_FLAG_SCROLL_CHAIN);
         lv_obj_add_event_cb(clr_btn, [](lv_event_t *e) {
             _filter_just_clicked = true; // reuse the same guard -- prevents the tap-elsewhere handler from also firing
-            aircraft_list_clear_trails(_list);
+            _trails_cleared_at = millis(); // this view's own cutoff -- doesn't touch shared trail data, so Map is unaffected
             lv_obj_invalidate(_radar_obj);
         }, LV_EVENT_CLICKED, nullptr);
 

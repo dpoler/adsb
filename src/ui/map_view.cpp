@@ -34,6 +34,11 @@ static int _last_active_loc = -2;          // sentinel so the first tick always 
 static lv_obj_t *_canvas = nullptr;
 static lv_obj_t *_range_label = nullptr;
 static MapProjection _proj;
+// Per-view "clear trails" cutoff -- Map and Radar share the same underlying
+// Aircraft/TrailPoint data, so clearing trails must not mutate that shared
+// data (it would clear both views at once). Instead each view independently
+// stops drawing any trail point older than its own cutoff.
+static uint32_t _trails_cleared_at = 0;
 
 // Runway label visibility depends on zoom tier (tuned against real airports —
 // KDEN's dense runway cluster vs. EGLL's wide-spaced pair vs. KAPA's mixed
@@ -546,6 +551,7 @@ static void draw_aircraft(lv_layer_t *layer) {
             trail_dsc.width = 1;
 
             for (int t = start; t < ac.trail_count; t++) {
+                if (ac.trail[t - 1].timestamp < _trails_cleared_at) continue;
                 int tx1, ty1, tx2, ty2;
                 if (_proj.to_screen(ac.trail[t - 1].lat, ac.trail[t - 1].lon, tx1, ty1) &&
                     _proj.to_screen(ac.trail[t].lat, ac.trail[t].lon, tx2, ty2)) {
@@ -926,7 +932,7 @@ void map_view_init(lv_obj_t *parent, AircraftList *list) {
         lv_obj_clear_flag(clr_btn, LV_OBJ_FLAG_SCROLL_CHAIN);
         lv_obj_add_event_cb(clr_btn, [](lv_event_t *e) {
             _filter_just_clicked = true; // reuse the same guard -- prevents the zoom-cycle tap handler from also firing
-            aircraft_list_clear_trails(_list);
+            _trails_cleared_at = millis(); // this view's own cutoff -- doesn't touch shared trail data, so Radar is unaffected
             lv_obj_invalidate(_canvas);
         }, LV_EVENT_CLICKED, nullptr);
 

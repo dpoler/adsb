@@ -87,14 +87,3 @@ public:
         xSemaphoreGive(mutex);
     }
 };
-
-// Wipes trail history for every aircraft currently in the list (position,
-// filters, etc. are untouched) -- a one-tap way to clear visual clutter on
-// Map/Radar without restarting.
-static inline void aircraft_list_clear_trails(AircraftList *list) {
-    if (!list || !list->lock(pdMS_TO_TICKS(50))) return;
-    for (int i = 0; i < list->count; i++) {
-        list->aircraft[i].trail_count = 0;
-    }
-    list->unlock();
-}
