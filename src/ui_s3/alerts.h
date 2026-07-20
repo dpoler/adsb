@@ -5,7 +5,6 @@ enum AlertType {
     ALERT_MILITARY,
     ALERT_EMERGENCY,
     ALERT_WATCHLIST,
-    ALERT_INTERESTING,
 };
 
 void alerts_init(lv_obj_t *parent);

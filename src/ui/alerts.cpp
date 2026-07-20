@@ -45,7 +45,6 @@ static lv_color_t alert_color(AlertType type) {
         case ALERT_EMERGENCY:  return lv_color_hex(0xff2222);
         case ALERT_MILITARY:   return lv_color_hex(0xffaa00);
         case ALERT_WATCHLIST:  return lv_color_hex(0x4488ff);
-        case ALERT_INTERESTING: return lv_color_hex(0x00cc88);
     }
     return lv_color_white();
 }
@@ -55,7 +54,6 @@ static const char *alert_icon(AlertType type) {
         case ALERT_EMERGENCY:  return LV_SYMBOL_WARNING;
         case ALERT_MILITARY:   return LV_SYMBOL_GPS;
         case ALERT_WATCHLIST:  return LV_SYMBOL_EYE_OPEN;
-        case ALERT_INTERESTING: return LV_SYMBOL_OK;
     }
     return LV_SYMBOL_BELL;
 }

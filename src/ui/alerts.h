@@ -5,7 +5,6 @@ enum AlertType {
     ALERT_MILITARY,
     ALERT_EMERGENCY,
     ALERT_WATCHLIST,
-    ALERT_INTERESTING,
 };
 
 // Initialize alert system (call once from LVGL context)
