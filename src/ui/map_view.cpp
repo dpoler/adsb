@@ -816,9 +816,12 @@ void map_view_init(lv_obj_t *parent, AircraftList *list) {
             return;
         }
 
-        // Hit test against aircraft (30px hit radius)
+        // Hit test against aircraft (30px hit radius) -- same filter/hide_ground
+        // gating as draw_aircraft(), so a hidden aircraft can't be tapped.
         if (!_list->lock(pdMS_TO_TICKS(10))) return;
         for (int i = 0; i < _list->count; i++) {
+            if (!aircraft_passes_filter(_list->aircraft[i])) continue;
+            if (g_config.hide_ground && _list->aircraft[i].on_ground) continue;
             int sx, sy;
             if (_proj.to_screen(_list->aircraft[i].lat, _list->aircraft[i].lon, sx, sy)) {
                 int dx = tx - sx;

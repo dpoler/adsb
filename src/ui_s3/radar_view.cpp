@@ -337,6 +337,7 @@ void radar_view_init(lv_obj_t *parent, AircraftList *list) {
 
         if (!_list->lock(pdMS_TO_TICKS(10))) return;
         for (int i = 0; i < _list->count; i++) {
+            if (!aircraft_passes_filter(_list->aircraft[i])) continue; // same gating as the draw loop
             int sx, sy;
             if (to_radar_screen(_list->aircraft[i].lat, _list->aircraft[i].lon, sx, sy)) {
                 int dx = tx - sx;
