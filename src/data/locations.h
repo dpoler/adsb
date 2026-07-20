@@ -3,7 +3,10 @@
 #include "aircraft.h"
 
 #define MAX_LOCATIONS 15   // saved airports, not counting Home
-#define MAX_RUNWAYS   8
+#define MAX_RUNWAYS   12   // KORD has exactly 8 active runways (11 total, 3
+                            // closed) -- was capped at 8, right at the edge;
+                            // bumped for headroom now that closed runways are
+                            // filtered out during parsing (locations.cpp)
 #define LOC_ICAO_LEN  8
 
 struct LocRunway {

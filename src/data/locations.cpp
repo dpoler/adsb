@@ -230,6 +230,15 @@ bool locations_add_from_icao(const char *icao, char *err, size_t err_size) {
                         JsonArray rwys = doc["runways"].as<JsonArray>();
                         for (JsonObject r : rwys) {
                             if (loc.runway_count >= MAX_RUNWAYS) break;
+                            // Skip decommissioned runways -- OurAirports (which
+                            // airportdb.io wraps) tracks this per-runway (e.g.
+                            // KORD's old diagonals 14L/32R, 15/33, 18/36 are
+                            // marked closed=1 despite still having valid
+                            // coordinates) and without this check we'd draw
+                            // them as if active, and -- since MAX_RUNWAYS is a
+                            // fixed cap -- potentially crowd out a real active
+                            // runway that arrives later in the array.
+                            if (r["closed"].as<int>() == 1) continue;
                             float le_lat = r["le_latitude_deg"].as<float>();
                             float le_lon = r["le_longitude_deg"].as<float>();
                             float he_lat = r["he_latitude_deg"].as<float>();
