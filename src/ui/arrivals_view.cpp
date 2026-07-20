@@ -45,6 +45,7 @@ enum SortMode {
 #define COL_DIST   4
 #define COL_HDG    5
 #define COL_STATUS 6
+#define COL_FPM    7
 
 static int  _sort_col  = COL_DIST;   // which column is sorted
 static SortMode _sort_dir = SORT_ASC; // ascending by default
@@ -71,8 +72,9 @@ static Column columns[] = {
     {"DIST",   450, true},
     {"HDG",    550, false},
     {"STATUS", 630, false},
+    {"FPM",    800, false}, // spaced clear of STATUS's content and the filter buttons (x=952)
 };
-#define NUM_COLS 7
+#define NUM_COLS 8
 
 struct BoardRow {
     lv_obj_t *col_labels[NUM_COLS];
@@ -267,7 +269,7 @@ static void update_board(lv_timer_t *t) {
         strlcpy(_rows[row].icao_hex, ac.icao_hex, sizeof(_rows[row].icao_hex));
 
         // Format each column
-        char flight[9], type[5], alt[5], spd[4], dist[5], hdg[4], status[16];
+        char flight[9], type[5], alt[5], spd[4], dist[5], hdg[4], status[8], fpm[8];
         snprintf(flight, sizeof(flight), "%-8s", ac.callsign[0] ? ac.callsign : ac.icao_hex);
         snprintf(type, sizeof(type), "%-4s", ac.type_code);
 
@@ -279,23 +281,17 @@ static void update_board(lv_timer_t *t) {
         if (dist_nm >= 99.95f) snprintf(dist, sizeof(dist), "%4.0f", dist_nm);
         else snprintf(dist, sizeof(dist), "%4.1f", dist_nm);
         snprintf(hdg, sizeof(hdg), "%03d", ac.heading);
+        snprintf(status, sizeof(status), "%-7s", status_from_vert_rate(ac.vert_rate, ac.on_ground));
 
-        // Append the numeric rate to the CLIMB/DESCEND/CRUISE/GROUND word --
-        // vert_rate_valid gate matters here for the same reason it does for
-        // FILT_VERT (filters.cpp): the feed doesn't report baro_rate every
-        // cycle, and a missing reading defaults to 0 in the parser, which
-        // would otherwise misleadingly print "+0" instead of admitting the
-        // data just isn't fresh this cycle.
-        const char *status_word = status_from_vert_rate(ac.vert_rate, ac.on_ground);
-        if (ac.on_ground) {
-            snprintf(status, sizeof(status), "%-7s", status_word);
-        } else if (ac.vert_rate_valid) {
-            snprintf(status, sizeof(status), "%-7s%+5d", status_word, ac.vert_rate);
-        } else {
-            snprintf(status, sizeof(status), "%-7s  N/A", status_word);
-        }
+        // Own FPM column -- blank for GROUND/CRUISE (nothing meaningful to
+        // show; this also covers the vert_rate_valid == false case for free,
+        // since a missing baro_rate reading defaults to 0 in the parser,
+        // which always classifies as CRUISE, never CLIMB/DESCEND).
+        bool climbing_or_descending = !ac.on_ground && (ac.vert_rate > 300 || ac.vert_rate < -300);
+        if (climbing_or_descending) snprintf(fpm, sizeof(fpm), "%+5d", ac.vert_rate);
+        else fpm[0] = '\0';
 
-        const char *texts[] = {flight, type, alt, spd, dist, hdg, status};
+        const char *texts[] = {flight, type, alt, spd, dist, hdg, status, fpm};
 
         lv_color_t color = CELL_TEXT;
         if (ac.is_emergency) color = EMERGENCY_CLR;
@@ -319,7 +315,7 @@ static void update_board(lv_timer_t *t) {
     // Clear rows below the displayed count
     for (; row < MAX_ROWS; row++) {
         if (_rows[row].active) {
-            const char *blanks[] = {"", "", "", "", "", "", ""};
+            const char *blanks[] = {"", "", "", "", "", "", "", ""};
             set_row_text(row, blanks, CELL_TEXT);
             _rows[row].active = false;
             memset(_rows[row].icao_hex, 0, sizeof(_rows[row].icao_hex));
