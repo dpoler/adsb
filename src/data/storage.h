@@ -25,7 +25,6 @@ struct UserConfig {
     // Alert settings
     bool alert_military;     // show popup for military aircraft
     bool alert_emergency;    // show popup for squawk 7500/7600/7700
-    bool alert_autofocus;    // auto-switch to map on military/emergency alerts
 
     // Trail settings
     bool trails_enabled;

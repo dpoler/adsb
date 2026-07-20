@@ -24,7 +24,6 @@ static lv_obj_t *_sw_ethernet = nullptr;
 static lv_obj_t *_btn_show_pass = nullptr;
 static lv_obj_t *_sw_alert_mil = nullptr;
 static lv_obj_t *_sw_alert_emg = nullptr;
-static lv_obj_t *_sw_autofocus = nullptr;
 static lv_obj_t *_sw_trails = nullptr;
 static lv_obj_t *_slider_trail_len = nullptr;
 static lv_obj_t *_trail_len_label = nullptr;
@@ -136,7 +135,6 @@ static void save_and_close(lv_event_t *e) {
     _cfg.use_ethernet = lv_obj_has_state(_sw_ethernet, LV_STATE_CHECKED);
     _cfg.alert_military = lv_obj_has_state(_sw_alert_mil, LV_STATE_CHECKED);
     _cfg.alert_emergency = lv_obj_has_state(_sw_alert_emg, LV_STATE_CHECKED);
-    _cfg.alert_autofocus = lv_obj_has_state(_sw_autofocus, LV_STATE_CHECKED);
     _cfg.trails_enabled = lv_obj_has_state(_sw_trails, LV_STATE_CHECKED);
     _cfg.trail_max_points = lv_slider_get_value(_slider_trail_len);
     _cfg.cycle_enabled = lv_obj_has_state(_sw_cycle, LV_STATE_CHECKED);
@@ -263,9 +261,6 @@ void settings_init(lv_obj_t *parent) {
 
     create_label(_panel, "Emg Alerts", 0, 326);
     _sw_alert_emg = create_switch(_panel, 110, 324, _cfg.alert_emergency);
-
-    create_label(_panel, "Alert Focus", 0, 360);
-    _sw_autofocus = create_switch(_panel, 110, 358, _cfg.alert_autofocus);
 
     // === RIGHT SIDE (x=420) ===
     int rx = 420;
@@ -405,9 +400,6 @@ void settings_show() {
 
     if (_cfg.alert_emergency) lv_obj_add_state(_sw_alert_emg, LV_STATE_CHECKED);
     else lv_obj_clear_state(_sw_alert_emg, LV_STATE_CHECKED);
-
-    if (_cfg.alert_autofocus) lv_obj_add_state(_sw_autofocus, LV_STATE_CHECKED);
-    else lv_obj_clear_state(_sw_autofocus, LV_STATE_CHECKED);
 
     if (_cfg.use_ethernet) lv_obj_add_state(_sw_ethernet, LV_STATE_CHECKED);
     else lv_obj_clear_state(_sw_ethernet, LV_STATE_CHECKED);

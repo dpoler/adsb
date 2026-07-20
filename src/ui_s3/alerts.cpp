@@ -151,24 +151,10 @@ void alerts_show(AlertType type, const char *title, const char *detail,
         _current_hex[0] = '\0';
     }
 
+    // Military/emergency alerts get a longer timeout. No auto-switch/center/
+    // track on Map -- popping up the toast is enough.
     if (type == ALERT_MILITARY || type == ALERT_EMERGENCY) {
         timeout_ms = 60000;
-
-        if (g_config.alert_autofocus) {
-            if (_current_hex[0] && aircraft_list.lock(pdMS_TO_TICKS(10))) {
-                for (int i = 0; i < aircraft_list.count; i++) {
-                    if (strcmp(aircraft_list.aircraft[i].icao_hex, _current_hex) == 0) {
-                        map_view_center_on(aircraft_list.aircraft[i].lat,
-                                           aircraft_list.aircraft[i].lon);
-                        map_view_track(_current_hex);
-                        break;
-                    }
-                }
-                aircraft_list.unlock();
-            }
-            views_pause_cycle();
-            lv_tileview_set_tile_by_index(views_get_tileview(), VIEW_MAP, 0, LV_ANIM_OFF);
-        }
     }
 
     lv_obj_set_style_border_color(_toast, color, 0);
