@@ -8,10 +8,8 @@
 #define FILT_MILITARY  1
 #define FILT_EMERGENCY 2
 #define FILT_HELI      3
-#define FILT_FAST      4
-#define FILT_SLOW      5
-#define FILT_ODDBALL   6
-#define NUM_FILTERS    7
+#define FILT_GA        4
+#define NUM_FILTERS    5
 
 struct FilterDef {
     const char *label;

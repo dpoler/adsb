@@ -1,4 +1,5 @@
 #include "filters.h"
+#include "aircraft_icons.h" // classify_icon() -- reused below for FILT_GA
 #include <cstring>
 
 const FilterDef filter_defs[NUM_FILTERS] = {
@@ -6,9 +7,7 @@ const FilterDef filter_defs[NUM_FILTERS] = {
     {"MIL",  "MILITARY",    lv_color_hex(0xffaa00)},
     {"EMG",  "EMERGENCY",   lv_color_hex(0xff3333)},
     {"HELI", "HELICOPTERS", lv_color_hex(0x44ddaa)},
-    {"FAST", "FAST >300kt", lv_color_hex(0xff66cc)},
-    {"SLOW", "SLOW <100kt", lv_color_hex(0x88aacc)},
-    {"ODD",  "ODDBALL",     lv_color_hex(0xcc88ff)},
+    {"GA",   "GENERAL AVIATION", lv_color_hex(0x44dd44)},
 };
 
 static int _active_filter = FILT_NONE;
@@ -62,17 +61,10 @@ bool aircraft_passes_filter(const Aircraft &ac) {
             if (ac.category[0] == 'A' && ac.category[1] == '7') return true;
             if (ac.type_code[0] && is_heli_type(ac.type_code)) return true;
             return false;
-        case FILT_FAST:
-            return ac.speed > 300 && !ac.on_ground;
-        case FILT_SLOW:
-            return ac.speed > 0 && ac.speed < 100 && !ac.on_ground;
-        case FILT_ODDBALL:
-            if (ac.category[0] == 'B') return true;
-            if (ac.registration[0] == 'N' && !is_airline_callsign(ac.callsign)) {
-                if (ac.category[0] == 'A' && (ac.category[1] == '1' || ac.category[1] == '2')) return true;
-                if (!ac.category[0] && ac.speed < 200) return true;
-            }
-            return false;
+        case FILT_GA:
+            // Reuses the same classification the map icon/legend already use
+            // (aircraft_icons.h) rather than a separate GA heuristic.
+            return classify_icon(ac) == ICON_GA;
     }
     return true;
 }
