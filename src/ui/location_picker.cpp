@@ -8,7 +8,7 @@
 
 #define PANEL_W    320
 #define ROW_H      44
-#define BTN_W      70
+#define BTN_W      64   // matches the filter-button column width (map/radar/arrivals all use CANVAS_W-64-8) so this sits flush at the top of that stack
 #define BTN_H      26
 
 #define COLOR_BG        lv_color_hex(0x0d0d1a)
@@ -328,7 +328,13 @@ static void build_add_view() {
 void location_picker_init(lv_obj_t *screen) {
     _picker_btn = lv_obj_create(screen);
     lv_obj_set_size(_picker_btn, BTN_W, BTN_H);
-    lv_obj_set_pos(_picker_btn, 4, 32); // centered in the 30px band below the status bar (30 + (30-BTN_H)/2)
+    // Right edge, directly above the filter-button stack that map_view.cpp/
+    // radar_view.cpp/arrivals_view.cpp each build independently at btn_x =
+    // CANVAS_W-64-8, btn_y0 = 109 within their canvas (139 absolute, since
+    // the canvas starts below the 30px status bar) -- keep this in sync if
+    // that geometry ever changes. Was top-left/floating before; moved here
+    // since it was in the way of the map/canvas content.
+    lv_obj_set_pos(_picker_btn, LCD_H_RES - BTN_W - 8, 139 - BTN_H - 14);
     lv_obj_set_style_bg_color(_picker_btn, COLOR_ROW, 0);
     lv_obj_set_style_bg_opa(_picker_btn, LV_OPA_COVER, 0);
     lv_obj_set_style_border_color(_picker_btn, COLOR_ACCENT, 0);

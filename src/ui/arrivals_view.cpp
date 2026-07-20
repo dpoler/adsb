@@ -456,10 +456,7 @@ void arrivals_view_init(lv_obj_t *parent, AircraftList *list) {
     lv_label_set_text(_title_label, "OVERHEAD TRAFFIC  Loading...");
     lv_obj_set_style_text_font(_title_label, &lv_font_montserrat_20, 0);
     lv_obj_set_style_text_color(_title_label, HEADER_TEXT, 0);
-    // Indented past the location picker button's footprint (top-left,
-    // location_picker.cpp, ~4-74px) -- it renders on the shared top-level
-    // screen above every tile, so the title text has to clear it instead.
-    lv_obj_align(_title_label, LV_ALIGN_LEFT_MID, 84, 0);
+    lv_obj_align(_title_label, LV_ALIGN_LEFT_MID, 10, 0);
 
     // Column header labels — sortable ones get wide clickable containers
     for (int i = 0; i < NUM_COLS; i++) {
