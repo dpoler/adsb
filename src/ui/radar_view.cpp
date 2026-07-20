@@ -454,16 +454,30 @@ void radar_view_init(lv_obj_t *parent, AircraftList *list) {
         _list->unlock();
     }, LV_EVENT_CLICKED, nullptr);
 
-    // Filter toggle buttons — vertical stack on right edge (same layout as map)
+    // Filter toggle buttons — vertical stack on right edge (same layout as
+    // map). FILT_VERT gets extra spacing and a thin divider above it -- see
+    // map_view.cpp's copy of this loop for why.
     {
-        int btn_w = 64, btn_h = 48, btn_gap = 10;
-        int total_h = NUM_FILTERS * btn_h + (NUM_FILTERS - 1) * btn_gap;
+        int btn_w = 64, btn_h = 48, btn_gap = 10, group_gap_extra = 14;
+        int total_h = NUM_FILTERS * btn_h + (NUM_FILTERS - 1) * btn_gap + group_gap_extra;
         int btn_x = RADAR_W - btn_w - 8;
         int btn_y0 = (RADAR_H - total_h) / 2;
         for (int i = 0; i < NUM_FILTERS; i++) {
+            int y = btn_y0 + i * (btn_h + btn_gap) + (i >= FILT_VERT ? group_gap_extra : 0);
+            if (i == FILT_VERT) {
+                lv_obj_t *div = lv_obj_create(parent);
+                lv_obj_set_size(div, btn_w, 1);
+                lv_obj_set_pos(div, btn_x, y - group_gap_extra / 2 - 1);
+                lv_obj_set_style_bg_color(div, lv_color_hex(0x444466), 0);
+                lv_obj_set_style_bg_opa(div, LV_OPA_COVER, 0);
+                lv_obj_set_style_border_width(div, 0, 0);
+                lv_obj_set_style_radius(div, 0, 0);
+                lv_obj_clear_flag(div, LV_OBJ_FLAG_SCROLLABLE);
+                lv_obj_clear_flag(div, LV_OBJ_FLAG_CLICKABLE);
+            }
             lv_obj_t *btn = lv_obj_create(parent);
             lv_obj_set_size(btn, btn_w, btn_h);
-            lv_obj_set_pos(btn, btn_x, btn_y0 + i * (btn_h + btn_gap));
+            lv_obj_set_pos(btn, btn_x, y);
             lv_obj_set_style_bg_color(btn, lv_color_hex(0x0a0a1a), 0);
             lv_obj_set_style_bg_opa(btn, LV_OPA_70, 0);
             lv_obj_set_style_border_color(btn, filter_defs[i].color, 0);
