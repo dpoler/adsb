@@ -463,6 +463,16 @@ static void fetch_task(void *param) {
             retries++;
         }
     }
+    // Refresh _active_net before reading it -- the retry loop above exits
+    // via wifi_connect_with_timeout()'s own success return (break), without
+    // re-calling network_connected() (the only thing that actually updates
+    // _active_net). Without this, _active_net is still stuck at NET_NONE
+    // from the loop's last failing iteration, so update_ip_addr() below
+    // would print "N/A" here even though the connection just succeeded --
+    // this was the 100%-reproducible-at-boot version of the N/A bug (as
+    // opposed to the reconnect-staleness one fixed by the per-tick call in
+    // the main loop below).
+    network_connected();
     update_ip_addr();
     const char *net_name = (_active_net == NET_ETHERNET) ? "Ethernet" : "WiFi";
     Serial.printf("\n%s connected, IP: %s\n", net_name, _fstats.ip_addr);
