@@ -9,6 +9,7 @@
 #include "../data/fetcher.h"
 #include "../data/error_log.h"
 #include "../data/locations.h"
+#include "geo.h" // altitude_color()
 
 #define STATS_W LCD_H_RES
 #define STATS_H (LCD_V_RES - 30)
@@ -36,10 +37,12 @@ static BarRow _cat_rows[5];
 static const char *CAT_NAMES[] = {"JETS", "GA", "HELI", "MIL", "EMRG"};
 static const uint32_t CAT_COLORS[] = {0x4488ff, 0x88aacc, 0x44ddaa, 0xffaa00, 0xff3333};
 
-// Altitude rows
+// Altitude rows -- colors sourced from altitude_color() (geo.h) at a
+// representative altitude in each band, rather than a second hardcoded
+// palette, so this can't drift from what the trails on Map/Radar draw.
 static BarRow _alt_rows[6];
 static const char *ALT_NAMES[] = {"GND", "<5k", "<15k", "<25k", "<35k", "35k+"};
-static const uint32_t ALT_COLORS[] = {0x666666, 0x00cc44, 0x88cc00, 0xcccc00, 0xcc8800, 0xcc2200};
+static const int32_t ALT_SAMPLES[] = {0, 2500, 10000, 20000, 30000, 45000};
 
 // Speed rows
 static BarRow _spd_rows[6];
@@ -433,9 +436,9 @@ void stats_view_init(lv_obj_t *parent, AircraftList *list) {
     _slowest_val = make_rec_row("SLOWEST", rr + rh);
     lv_obj_set_style_text_color(_slowest_val, lv_color_hex(0x66aaff), 0);
     _highest_val = make_rec_row("HIGHEST", rr + rh * 2);
-    lv_obj_set_style_text_color(_highest_val, lv_color_hex(0xcc8800), 0);
+    lv_obj_set_style_text_color(_highest_val, altitude_color(45000), 0); // high end of the altitude gradient
     _lowest_val  = make_rec_row("LOWEST",  rr + rh * 3);
-    lv_obj_set_style_text_color(_lowest_val, lv_color_hex(0x00cc44), 0);
+    lv_obj_set_style_text_color(_lowest_val, altitude_color(1000), 0); // low end of the altitude gradient
     _closest_val = make_rec_row("CLOSEST", rr + rh * 4);
     lv_obj_set_style_text_color(_closest_val, lv_color_hex(0x44ddaa), 0);
 
@@ -478,7 +481,8 @@ void stats_view_init(lv_obj_t *parent, AircraftList *list) {
     // Altitude distribution
     create_section_header(_container, "ALTITUDE", cx, 8);
     for (int i = 0; i < 6; i++) {
-        create_bar_row(_container, &_alt_rows[i], ALT_NAMES[i], ALT_COLORS[i],
+        create_bar_row(_container, &_alt_rows[i], ALT_NAMES[i],
+                       lv_color_to_u32(altitude_color(ALT_SAMPLES[i])),
                        cx, 26 + i * 22);
     }
 

@@ -603,13 +603,16 @@ static void draw_aircraft(lv_layer_t *layer) {
 }
 
 static void draw_altitude_legend(lv_layer_t *layer) {
+    // Colors sourced from altitude_color() at a representative altitude in
+    // each labeled band, rather than a second hardcoded palette -- keeps the
+    // legend from drifting out of sync with what the trails actually draw.
     struct { const char *label; lv_color_t color; } entries[] = {
-        {"GND",  lv_color_hex(0x666666)},
-        {"<5k",  lv_color_hex(0x00cc44)},
-        {"<15k", lv_color_hex(0x88cc00)},
-        {"<25k", lv_color_hex(0xcccc00)},
-        {"<35k", lv_color_hex(0xcc8800)},
-        {"35k+", lv_color_hex(0xcc2200)},
+        {"GND",  altitude_color(0)},
+        {"<5k",  altitude_color(2500)},
+        {"<15k", altitude_color(10000)},
+        {"<25k", altitude_color(20000)},
+        {"<35k", altitude_color(30000)},
+        {"35k+", altitude_color(45000)},
     };
 
     int x = 8;

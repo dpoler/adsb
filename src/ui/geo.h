@@ -38,14 +38,63 @@ struct MapProjection {
     }
 };
 
-// Altitude to color for trails (green=low, yellow=mid, red=high)
+// HSL -> RGB, H in degrees [0,360), S/L as fractions [0,1].
+static inline void hsl_to_rgb(float h, float s, float l, uint8_t *r, uint8_t *g, uint8_t *b) {
+    float c = (1.0f - fabsf(2.0f * l - 1.0f)) * s;
+    float hp = h / 60.0f;
+    float x = c * (1.0f - fabsf(fmodf(hp, 2.0f) - 1.0f));
+    float m = l - c / 2.0f;
+    float rp, gp, bp;
+    if      (hp < 1) { rp = c; gp = x; bp = 0; }
+    else if (hp < 2) { rp = x; gp = c; bp = 0; }
+    else if (hp < 3) { rp = 0; gp = c; bp = x; }
+    else if (hp < 4) { rp = 0; gp = x; bp = c; }
+    else if (hp < 5) { rp = x; gp = 0; bp = c; }
+    else             { rp = c; gp = 0; bp = x; }
+    *r = (uint8_t)((rp + m) * 255.0f + 0.5f);
+    *g = (uint8_t)((gp + m) * 255.0f + 0.5f);
+    *b = (uint8_t)((bp + m) * 255.0f + 0.5f);
+}
+
+// Altitude to color for trails. Hue ramp (orange -> yellow -> green ->
+// magenta -> red) and altitude breakpoints ported from the ADS-B community's
+// de facto standard altitude coloring -- originally FlightAware's
+// skyaware/dump1090-fa, now used by tar1090, readsb, and most self-hosted
+// ADS-B viewers -- rather than an arbitrary palette, so this display's
+// altitude colors read the same way other ADS-B tools' do. Source:
+// https://github.com/wiedehopf/tar1090 html/defaults.js, ColorByAlt.air.
+// Simplified from the source: saturation/lightness are held flat here
+// instead of also varying by hue (the source's `l` table exists to keep
+// perceived brightness consistent across hues -- a refinement not worth the
+// extra lookup table for a small embedded trail line).
 static inline lv_color_t altitude_color(int32_t alt_ft) {
-    if (alt_ft <= 0) return lv_color_hex(0x666666);       // ground
-    if (alt_ft < 5000) return lv_color_hex(0x00cc44);     // green
-    if (alt_ft < 15000) return lv_color_hex(0x88cc00);    // yellow-green
-    if (alt_ft < 25000) return lv_color_hex(0xcccc00);    // yellow
-    if (alt_ft < 35000) return lv_color_hex(0xcc8800);    // orange
-    return lv_color_hex(0xcc2200);                         // red (high altitude)
+    if (alt_ft <= 0) return lv_color_hex(0x666666); // ground
+
+    static const struct { float alt, hue; } pts[] = {
+        {0,     20.0f},  // orange
+        {2000,  32.5f},
+        {4000,  43.0f},  // yellow
+        {6000,  54.0f},
+        {8000,  72.0f},
+        {9000,  85.0f},  // green-yellow
+        {11000, 140.0f}, // light green
+        {40000, 300.0f}, // magenta
+        {51000, 360.0f}, // red
+    };
+    const int n = sizeof(pts) / sizeof(pts[0]);
+    float hue = pts[0].hue;
+    for (int i = n - 1; i >= 0; i--) {
+        if (alt_ft > pts[i].alt) {
+            hue = (i == n - 1) ? pts[i].hue
+                : pts[i].hue + (pts[i + 1].hue - pts[i].hue) *
+                      (alt_ft - pts[i].alt) / (pts[i + 1].alt - pts[i].alt);
+            break;
+        }
+    }
+
+    uint8_t r, g, b;
+    hsl_to_rgb(hue, 0.88f, 0.47f, &r, &g, &b);
+    return lv_color_make(r, g, b);
 }
 
 // Aircraft category colors — distinctive per type
