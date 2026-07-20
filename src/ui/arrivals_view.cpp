@@ -8,6 +8,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include "range.h"
+#include "filters.h"
 #include "../data/storage.h"
 #include "../data/locations.h"
 
@@ -15,6 +16,9 @@ static AircraftList *_list = nullptr;      // currently effective list
 static AircraftList *_home_list = nullptr; // the list passed in at init
 static lv_obj_t *_board_container = nullptr;
 static lv_obj_t *_range_label = nullptr;
+static lv_obj_t *_filter_btns[NUM_FILTERS] = {};
+static lv_obj_t *_filter_lbls[NUM_FILTERS] = {};
+static bool _filter_just_clicked = false; // suppress the row-tap handler right after a filter button tap
 
 #define BOARD_W LCD_H_RES
 #define BOARD_H (LCD_V_RES - 30)
@@ -160,9 +164,39 @@ static int sort_compare(const void *a, const void *b) {
     return (_sort_dir == SORT_DESC) ? -cmp : cmp;
 }
 
+// Filter button visuals -- same look/behavior as map_view.cpp/radar_view.cpp
+static void update_filter_visuals() {
+    unsigned active = filter_get_active();
+    for (int i = 0; i < NUM_FILTERS; i++) {
+        if (active & (1u << i)) {
+            lv_obj_set_style_bg_color(_filter_btns[i], filter_defs[i].color, 0);
+            lv_obj_set_style_bg_opa(_filter_btns[i], LV_OPA_COVER, 0);
+            lv_obj_set_style_border_color(_filter_btns[i], lv_color_hex(0xffffff), 0);
+            lv_obj_set_style_border_width(_filter_btns[i], 2, 0);
+            lv_obj_set_style_border_opa(_filter_btns[i], LV_OPA_COVER, 0);
+            lv_obj_set_style_text_color(_filter_lbls[i], lv_color_hex(0x000000), 0);
+        } else {
+            lv_obj_set_style_bg_color(_filter_btns[i], lv_color_hex(0x0a0a1a), 0);
+            lv_obj_set_style_bg_opa(_filter_btns[i], LV_OPA_70, 0);
+            lv_obj_set_style_border_color(_filter_btns[i], filter_defs[i].color, 0);
+            lv_obj_set_style_border_width(_filter_btns[i], 1, 0);
+            lv_obj_set_style_border_opa(_filter_btns[i], LV_OPA_40, 0);
+            lv_obj_set_style_text_color(_filter_lbls[i], lv_color_hex(0x666666), 0);
+        }
+    }
+}
+
 // Update board data from aircraft list
 static void update_board(lv_timer_t *t) {
     if (views_get_active_index() != VIEW_ARRIVALS) return;
+
+    // Sync filter button visuals if filter changed from another view
+    static unsigned _last_synced_filter = ~0u; // impossible bitmask value, forces sync on first tick
+    unsigned af = filter_get_active();
+    if (af != _last_synced_filter) {
+        _last_synced_filter = af;
+        update_filter_visuals();
+    }
 
     _list = locations_active_list(_home_list);
     float center_lat, center_lon;
@@ -180,6 +214,7 @@ static void update_board(lv_timer_t *t) {
         Aircraft &ac = _list->aircraft[i];
         if (ac.lat == 0 && ac.lon == 0) continue;
         if (g_config.hide_ground && ac.on_ground) continue;
+        if (!aircraft_passes_filter(ac)) continue;
         float d = MapProjection::distance_nm(center_lat, center_lon, ac.lat, ac.lon);
         if (d > range_get_nm()) continue;
         entries[n_entries].index = i;
@@ -252,8 +287,14 @@ static void update_board(lv_timer_t *t) {
         }
     }
 
-    // Update title with range-filtered count
-    lv_label_set_text_fmt(_title_label, "OVERHEAD TRAFFIC  <%s    %d", range_label(), displayed_count);
+    // Update title with range-filtered count (and active filters, if any)
+    char filter_buf[128];
+    if (filter_label_text(filter_buf, sizeof(filter_buf), nullptr) > 0) {
+        lv_label_set_text_fmt(_title_label, "OVERHEAD TRAFFIC  <%s    %d    %s",
+                              range_label(), displayed_count, filter_buf);
+    } else {
+        lv_label_set_text_fmt(_title_label, "OVERHEAD TRAFFIC  <%s    %d", range_label(), displayed_count);
+    }
     lv_label_set_text(_range_label, range_label());
 
     _list->unlock();
@@ -261,6 +302,14 @@ static void update_board(lv_timer_t *t) {
 
 void arrivals_view_on_show() {
     update_board(nullptr);
+}
+
+static void filter_click_cb(lv_event_t *e) {
+    int idx = (int)(intptr_t)lv_event_get_user_data(e);
+    _filter_just_clicked = true;
+    filter_toggle(idx);
+    update_filter_visuals();
+    update_board(nullptr); // refresh immediately rather than waiting for the next 2s tick
 }
 
 // Update header label text to show sort indicator
@@ -320,6 +369,14 @@ void arrivals_view_init(lv_obj_t *parent, AircraftList *list) {
         if (views_get_active_index() != VIEW_ARRIVALS) return;
         if (views_swipe_active()) { views_clear_swipe(); return; }
 
+        // Guard: skip if a filter button was just clicked -- the row-tap
+        // logic below only checks Y, not X, so a tap on the filter column
+        // would otherwise also be read as a row tap.
+        if (_filter_just_clicked) {
+            _filter_just_clicked = false;
+            return;
+        }
+
         if (detail_card_is_visible()) {
             detail_card_hide();
             return;
@@ -361,7 +418,10 @@ void arrivals_view_init(lv_obj_t *parent, AircraftList *list) {
     lv_label_set_text(_title_label, "OVERHEAD TRAFFIC  Loading...");
     lv_obj_set_style_text_font(_title_label, &lv_font_montserrat_20, 0);
     lv_obj_set_style_text_color(_title_label, HEADER_TEXT, 0);
-    lv_obj_align(_title_label, LV_ALIGN_LEFT_MID, 10, 0);
+    // Indented past the location picker button's footprint (top-left,
+    // location_picker.cpp, ~4-74px) -- it renders on the shared top-level
+    // screen above every tile, so the title text has to clear it instead.
+    lv_obj_align(_title_label, LV_ALIGN_LEFT_MID, 84, 0);
 
     // Column header labels — sortable ones get wide clickable containers
     for (int i = 0; i < NUM_COLS; i++) {
@@ -417,6 +477,54 @@ void arrivals_view_init(lv_obj_t *parent, AircraftList *list) {
         range_cycle();
         lv_label_set_text(_range_label, range_label());
     }, LV_EVENT_CLICKED, nullptr);
+
+    // Filter toggle buttons — vertical stack on right edge, same layout as
+    // map_view.cpp/radar_view.cpp (including the FILT_VERT divider). Fits in
+    // the space freed up by the removed ROUTE column.
+    {
+        int btn_w = 64, btn_h = 48, btn_gap = 10, group_gap_extra = 14;
+        int total_h = NUM_FILTERS * btn_h + (NUM_FILTERS - 1) * btn_gap + group_gap_extra;
+        int btn_x = BOARD_W - btn_w - 8;
+        int btn_y0 = (BOARD_H - total_h) / 2;
+        for (int i = 0; i < NUM_FILTERS; i++) {
+            int y = btn_y0 + i * (btn_h + btn_gap) + (i >= FILT_VERT ? group_gap_extra : 0);
+            if (i == FILT_VERT) {
+                lv_obj_t *div = lv_obj_create(parent);
+                lv_obj_set_size(div, btn_w, 1);
+                lv_obj_set_pos(div, btn_x, y - (btn_gap + group_gap_extra) / 2);
+                lv_obj_set_style_bg_color(div, lv_color_hex(0x444466), 0);
+                lv_obj_set_style_bg_opa(div, LV_OPA_COVER, 0);
+                lv_obj_set_style_border_width(div, 0, 0);
+                lv_obj_set_style_radius(div, 0, 0);
+                lv_obj_clear_flag(div, LV_OBJ_FLAG_SCROLLABLE);
+                lv_obj_clear_flag(div, LV_OBJ_FLAG_CLICKABLE);
+            }
+            lv_obj_t *btn = lv_obj_create(parent);
+            lv_obj_set_size(btn, btn_w, btn_h);
+            lv_obj_set_pos(btn, btn_x, y);
+            lv_obj_set_style_bg_color(btn, lv_color_hex(0x0a0a1a), 0);
+            lv_obj_set_style_bg_opa(btn, LV_OPA_70, 0);
+            lv_obj_set_style_border_color(btn, filter_defs[i].color, 0);
+            lv_obj_set_style_border_width(btn, 1, 0);
+            lv_obj_set_style_border_opa(btn, LV_OPA_40, 0);
+            lv_obj_set_style_radius(btn, 6, 0);
+            lv_obj_set_style_pad_all(btn, 0, 0);
+            lv_obj_clear_flag(btn, LV_OBJ_FLAG_SCROLLABLE);
+            lv_obj_clear_flag(btn, LV_OBJ_FLAG_SCROLL_CHAIN);
+            lv_obj_add_event_cb(btn, filter_click_cb, LV_EVENT_CLICKED,
+                                (void *)(intptr_t)i);
+
+            lv_obj_t *lbl = lv_label_create(btn);
+            lv_label_set_text(lbl, filter_defs[i].label);
+            lv_obj_set_style_text_font(lbl, &lv_font_montserrat_16, 0);
+            lv_obj_set_style_text_color(lbl, lv_color_hex(0x666666), 0);
+            lv_obj_center(lbl);
+
+            _filter_btns[i] = btn;
+            _filter_lbls[i] = lbl;
+        }
+        update_filter_visuals();
+    }
 
     // Data update timer
     lv_timer_create(update_board, 2000, nullptr);

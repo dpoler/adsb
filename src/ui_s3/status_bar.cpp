@@ -13,7 +13,7 @@ static lv_obj_t *nav_labels[4];
 static lv_obj_t *gear_icon;
 static lv_obj_t *auto_label;
 
-static const char *NAV_NAMES[] = {"MAP", "RDR", "ARR", "STS"};
+static const char *NAV_NAMES[] = {"MAP", "RDR", "LIST", "STS"};
 
 #define STATUS_BAR_HEIGHT 24
 #define STATUS_BG_COLOR lv_color_hex(0x0d0d1a)
