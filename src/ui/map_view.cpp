@@ -861,7 +861,7 @@ void map_view_init(lv_obj_t *parent, AircraftList *list) {
         if (i == FILT_VERT) {
             lv_obj_t *div = lv_obj_create(parent);
             lv_obj_set_size(div, btn_w, 1);
-            lv_obj_set_pos(div, btn_x, y - group_gap_extra / 2 - 1);
+            lv_obj_set_pos(div, btn_x, y - (btn_gap + group_gap_extra) / 2);
             lv_obj_set_style_bg_color(div, lv_color_hex(0x444466), 0);
             lv_obj_set_style_bg_opa(div, LV_OPA_COVER, 0);
             lv_obj_set_style_border_width(div, 0, 0);
