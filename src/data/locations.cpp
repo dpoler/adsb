@@ -44,18 +44,50 @@ static bool _add_result_ready = false;
 static bool _add_result_ok = false;
 static char _add_result_err[48] = {};
 
-// Writes only the used slots (_count * sizeof(Location)), not the whole
-// fixed-size MAX_LOCATIONS array -- with few saved airports this is a much
-// smaller blocking NVS/flash write (a handful of runways vs. ~3.2KB for the
-// full 15-slot array every time), which showed up as a brief full-screen
-// solid-color flash on this board's LCD panel (a stall long enough to
-// visibly starve the display's refresh; the much smaller UserConfig blob in
-// storage.cpp's writes don't stall long enough to be visible).
+// On-disk format: for each saved location, a fixed-size header (icao, lat,
+// lon, elevation_ft, runway_count) followed by exactly runway_count
+// LocRunway entries -- NOT a fixed MAX_RUNWAYS reservation. A location's
+// runways[] array in memory is sized for the worst case (KORD-sized
+// airports), but writing that full reservation to NVS for every saved
+// airport regardless of how many runways it actually has is exactly the
+// kind of large blocking flash write that visibly stalls this board's LCD
+// panel (see project_p4_heap_constraints memory -- the cyan-flash bug).
+// Packing tightly keeps the write proportional to real data.
+struct LocationHeader {
+    char icao[LOC_ICAO_LEN];
+    float lat, lon;
+    int elevation_ft;
+    int runway_count;
+};
+
 static void save_all() {
     _prefs.begin("adsb_locs", false);
     _prefs.putInt("count", _count);
     if (_count > 0) {
-        _prefs.putBytes("locs", _locations, (size_t)_count * sizeof(Location));
+        size_t buf_size = 0;
+        for (int i = 0; i < _count; i++)
+            buf_size += sizeof(LocationHeader) + (size_t)_locations[i].runway_count * sizeof(LocRunway);
+
+        uint8_t *buf = (uint8_t *)heap_caps_malloc(buf_size, MALLOC_CAP_SPIRAM);
+        if (buf) {
+            size_t pos = 0;
+            for (int i = 0; i < _count; i++) {
+                const Location &loc = _locations[i];
+                LocationHeader hdr;
+                strlcpy(hdr.icao, loc.icao, sizeof(hdr.icao));
+                hdr.lat = loc.lat;
+                hdr.lon = loc.lon;
+                hdr.elevation_ft = loc.elevation_ft;
+                hdr.runway_count = loc.runway_count;
+                memcpy(buf + pos, &hdr, sizeof(hdr));
+                pos += sizeof(hdr);
+                size_t rwy_bytes = (size_t)loc.runway_count * sizeof(LocRunway);
+                memcpy(buf + pos, loc.runways, rwy_bytes);
+                pos += rwy_bytes;
+            }
+            _prefs.putBytes("locs", buf, buf_size);
+            heap_caps_free(buf);
+        }
     } else {
         _prefs.remove("locs");
     }
@@ -68,18 +100,44 @@ void locations_init() {
     if (_count < 0) _count = 0;
     if (_count > MAX_LOCATIONS) _count = MAX_LOCATIONS;
     memset(_locations, 0, sizeof(_locations));
-    // Read into the full-size buffer regardless of _count -- stays compatible
-    // with older saves written before save_all() started trimming the blob to
-    // just the used slots (getBytes fails/returns 0 if the buffer passed in
-    // is smaller than what's actually stored, so this must stay full-size).
-    size_t expect = (size_t)_count * sizeof(Location);
-    size_t got = _prefs.getBytes("locs", _locations, sizeof(_locations));
-    if (got < expect) {
-        // Saved blob is smaller than count claims -- inconsistent, don't
-        // trust partial data.
+
+    size_t blob_len = _prefs.getBytesLength("locs");
+    if (_count > 0 && blob_len > 0) {
+        uint8_t *buf = (uint8_t *)heap_caps_malloc(blob_len, MALLOC_CAP_SPIRAM);
+        int parsed = 0;
+        if (buf) {
+            size_t got = _prefs.getBytes("locs", buf, blob_len);
+            size_t pos = 0;
+            for (; parsed < _count; parsed++) {
+                if (pos + sizeof(LocationHeader) > got) break; // truncated -- bail, don't trust the rest
+                LocationHeader hdr;
+                memcpy(&hdr, buf + pos, sizeof(hdr));
+                pos += sizeof(hdr);
+                if (hdr.runway_count < 0 || hdr.runway_count > MAX_RUNWAYS) break; // corrupt
+                size_t rwy_bytes = (size_t)hdr.runway_count * sizeof(LocRunway);
+                if (pos + rwy_bytes > got) break; // truncated
+
+                Location &loc = _locations[parsed];
+                strlcpy(loc.icao, hdr.icao, sizeof(loc.icao));
+                loc.lat = hdr.lat;
+                loc.lon = hdr.lon;
+                loc.elevation_ft = hdr.elevation_ft;
+                loc.runway_count = hdr.runway_count;
+                memcpy(loc.runways, buf + pos, rwy_bytes);
+                pos += rwy_bytes;
+            }
+            heap_caps_free(buf);
+        }
+        if (parsed != _count) {
+            // Inconsistent/corrupt/old-format blob -- don't trust partial data.
+            _count = 0;
+            memset(_locations, 0, sizeof(_locations));
+        }
+    } else if (_count > 0) {
+        // count > 0 but no blob at all -- inconsistent, reset.
         _count = 0;
-        memset(_locations, 0, sizeof(_locations));
     }
+
     _prefs.end();
     _active_index = -1; // always boot on Home
 
