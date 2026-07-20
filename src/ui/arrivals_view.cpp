@@ -72,7 +72,7 @@ static Column columns[] = {
     {"DIST",   450, true},
     {"HDG",    550, false},
     {"STATUS", 630, false},
-    {"FPM",    800, false}, // spaced clear of STATUS's content and the filter buttons (x=952)
+    {"FPM",    740, false}, // ~110px after STATUS -- wider gap than most (80-100px) since STATUS's own text ("DESCEND", 7 chars) needs more room than short fields like HDG
 };
 #define NUM_COLS 8
 
