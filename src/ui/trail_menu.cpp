@@ -117,12 +117,20 @@ static void open_overlay() {
     lv_obj_set_style_bg_color(slider, lv_color_hex(0x333366), 0);
     lv_obj_set_style_bg_color(slider, COLOR_ACCENT, LV_PART_INDICATOR);
     lv_obj_set_style_bg_color(slider, COLOR_ACCENT, LV_PART_KNOB);
+    // VALUE_CHANGED fires repeatedly while dragging -- update the live value
+    // and label on every tick (cheap, in-memory only), but only persist to
+    // NVS once on RELEASED. storage_save_config() is a blocking flash write;
+    // calling it on every drag tick was stalling the LCD refresh badly
+    // enough to cause a visible flash -- same root cause as the earlier
+    // cyan-flash-on-airport-delete bug (see project_backlog memory).
     lv_obj_add_event_cb(slider, [](lv_event_t *e) {
         int val = lv_slider_get_value(lv_event_get_target_obj(e));
         g_config.trail_max_points = val;
         lv_label_set_text_fmt(_len_label, "%d pts", val);
-        storage_save_config(g_config);
     }, LV_EVENT_VALUE_CHANGED, nullptr);
+    lv_obj_add_event_cb(slider, [](lv_event_t *e) {
+        storage_save_config(g_config);
+    }, LV_EVENT_RELEASED, nullptr);
 
     // Clear now -- dispatches to whichever of Map/Radar is currently active,
     // same as the chip's old direct-clear behavior.
