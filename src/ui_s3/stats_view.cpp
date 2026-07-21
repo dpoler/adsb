@@ -37,9 +37,11 @@ static const uint32_t CAT_COLORS[] = {0x4488ff, 0x88aacc, 0x44ddaa, 0xffaa00, 0x
 // Altitude rows -- colors sourced from altitude_color() (geo.h) at a
 // representative altitude in each band, rather than a second hardcoded
 // palette, so this can't drift from what the trails on Map/Radar draw.
-static BarRow _alt_rows[6];
-static const char *ALT_NAMES[] = {"GND", "<5k", "<15k", "<25k", "<35k", "35k+"};
-static const int32_t ALT_SAMPLES[] = {0, 2500, 10000, 20000, 30000, 45000};
+// GND dropped -- ground traffic is excluded from this whole screen (see
+// ../ui/stats.cpp), so that bucket would always read zero.
+static BarRow _alt_rows[5];
+static const char *ALT_NAMES[] = {"<5k", "<15k", "<25k", "<35k", "35k+"};
+static const int32_t ALT_SAMPLES[] = {2500, 10000, 20000, 30000, 45000};
 
 // Records
 static lv_obj_t *_fastest_val = nullptr;
@@ -139,8 +141,9 @@ static void create_section_header(lv_obj_t *parent, const char *text, int x, int
 }
 
 static void refresh_stats(lv_timer_t *t) {
-    if (views_get_active_index() != VIEW_STATS) return;
-
+    // Deliberately not gated on "is Stats the active tab" -- UNIQUE/PEAK
+    // describe the whole time this location's been selected, not just
+    // however long the Stats screen happens to have been open.
     stats_update(_list);
     const SessionStats *s = stats_get();
     const FetcherStats *fs = fetcher_get_stats();
@@ -154,14 +157,14 @@ static void refresh_stats(lv_timer_t *t) {
         update_bar(&_cat_rows[i], cat_counts[i], cat_total);
     }
 
-    // Altitude bars
-    int alt_counts[] = {s->alt_gnd, s->alt_low, s->alt_med_low,
+    // Altitude bars (ground traffic excluded entirely -- see ../ui/stats.cpp)
+    int alt_counts[] = {s->alt_low, s->alt_med_low,
                         s->alt_med, s->alt_high, s->alt_very_high};
     int alt_max = 1;
-    for (int i = 0; i < 6; i++) {
+    for (int i = 0; i < 5; i++) {
         if (alt_counts[i] > alt_max) alt_max = alt_counts[i];
     }
-    for (int i = 0; i < 6; i++) {
+    for (int i = 0; i < 5; i++) {
         update_bar(&_alt_rows[i], alt_counts[i], alt_max);
     }
 
@@ -349,14 +352,14 @@ void stats_view_init(lv_obj_t *parent, AircraftList *list) {
 
     // Altitude distribution
     create_section_header(_container, "ALTITUDE", rx, 6);
-    for (int i = 0; i < 6; i++) {
+    for (int i = 0; i < 5; i++) {
         create_bar_row(_container, &_alt_rows[i], ALT_NAMES[i],
                        lv_color_to_u32(altitude_color(ALT_SAMPLES[i])),
                        rx, 22 + i * 18);
     }
 
     // Session
-    int ss_y = 22 + 6 * 18 + 6;
+    int ss_y = 22 + 5 * 18 + 6;
     create_section_header(_container, "SESSION", rx, ss_y);
     _unique_val = create_stat_pair(_container, "UNIQUE", rx, ss_y + 16, ACCENT_COLOR);
     _peak_val = create_stat_pair(_container, "PEAK", rx + 70, ss_y + 16, ACCENT_COLOR);

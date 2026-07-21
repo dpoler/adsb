@@ -168,7 +168,6 @@ void stats_update(AircraftList *list) {
     _stats.heli = 0;
     _stats.military = 0;
     _stats.emergency = 0;
-    _stats.alt_gnd = 0;
     _stats.alt_low = 0;
     _stats.alt_med_low = 0;
     _stats.alt_med = 0;
@@ -184,7 +183,6 @@ void stats_update(AircraftList *list) {
     _stats.lowest_callsign[0] = 0;
     _stats.closest_dist = 9999.0f;
     _stats.closest_callsign[0] = 0;
-    _stats.spd_gnd = 0;
     _stats.spd_slow = 0;
     _stats.spd_med = 0;
     _stats.spd_fast = 0;
@@ -204,6 +202,11 @@ void stats_update(AircraftList *list) {
         Aircraft &ac = list->aircraft[i];
         if (compute_aircraft_opacity(ac.stale_since, now) == 0) continue;
         if (ac.lat == 0 && ac.lon == 0) continue;
+        // How many aircraft happen to be sitting on the ground isn't the
+        // point of this screen -- exclude them from every count/bar/record
+        // below rather than just some of them (FASTEST previously didn't
+        // filter on_ground at all, an inconsistency with the others).
+        if (ac.on_ground) continue;
 
         _stats.current_count++;
         bool is_new = !already_seen(ac.icao_hex);
@@ -214,8 +217,7 @@ void stats_update(AircraftList *list) {
         }
 
         // Speed distribution
-        if (ac.on_ground) _stats.spd_gnd++;
-        else if (ac.speed < 200) _stats.spd_slow++;
+        if (ac.speed < 200) _stats.spd_slow++;
         else if (ac.speed < 300) _stats.spd_med++;
         else if (ac.speed < 400) _stats.spd_fast++;
         else if (ac.speed < 500) _stats.spd_very_fast++;
@@ -233,37 +235,33 @@ void stats_update(AircraftList *list) {
         else if (is_j) _stats.jets++;
         else _stats.ga++;
 
-        if (ac.on_ground) _stats.alt_gnd++;
-        else if (ac.altitude < 5000) _stats.alt_low++;
+        if (ac.altitude < 5000) _stats.alt_low++;
         else if (ac.altitude < 15000) _stats.alt_med_low++;
         else if (ac.altitude < 25000) _stats.alt_med++;
         else if (ac.altitude < 35000) _stats.alt_high++;
         else _stats.alt_very_high++;
 
-        // Fastest (any aircraft with speed data)
+        // Fastest
         if (ac.speed > _stats.fastest_speed) {
             _stats.fastest_speed = ac.speed;
             strlcpy(_stats.fastest_callsign,
                     ac.callsign[0] ? ac.callsign : ac.icao_hex, 9);
         }
 
-        // Airborne-only records: filter out on_ground and zero/bogus values
-        if (!ac.on_ground && ac.speed > 30) {
-            // Slowest airborne (>30kt filters out parked/taxiing with bad on_ground)
-            if (ac.speed < _stats.slowest_speed) {
-                _stats.slowest_speed = ac.speed;
-                strlcpy(_stats.slowest_callsign,
-                        ac.callsign[0] ? ac.callsign : ac.icao_hex, 9);
-            }
+        // Slowest (>30kt filters out taxiing aircraft with bad on_ground data)
+        if (ac.speed > 30 && ac.speed < _stats.slowest_speed) {
+            _stats.slowest_speed = ac.speed;
+            strlcpy(_stats.slowest_callsign,
+                    ac.callsign[0] ? ac.callsign : ac.icao_hex, 9);
         }
-        if (!ac.on_ground && ac.altitude > 100) {
+        if (ac.altitude > 100) {
             // Highest
             if (ac.altitude > _stats.highest_alt) {
                 _stats.highest_alt = ac.altitude;
                 strlcpy(_stats.highest_callsign,
                         ac.callsign[0] ? ac.callsign : ac.icao_hex, 9);
             }
-            // Lowest airborne (>100ft filters out just-landed with bad on_ground)
+            // Lowest (>100ft filters out just-landed aircraft with bad on_ground data)
             if (ac.altitude < _stats.lowest_alt) {
                 _stats.lowest_alt = ac.altitude;
                 strlcpy(_stats.lowest_callsign,

@@ -9,7 +9,6 @@ struct SessionStats {
     int heli;
     int military;
     int emergency;
-    int alt_gnd;
     int alt_low;       // < 5000
     int alt_med_low;   // < 15000
     int alt_med;       // < 25000
@@ -32,7 +31,6 @@ struct SessionStats {
     uint32_t boot_time;
 
     // Speed distribution
-    int spd_gnd;
     int spd_slow;      // < 200kt
     int spd_med;       // < 300kt
     int spd_fast;      // < 400kt

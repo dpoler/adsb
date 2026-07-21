@@ -15,7 +15,7 @@
 #define STATS_W LCD_H_RES
 #define STATS_H (LCD_V_RES - STATUS_BAR_HEIGHT)
 #define BG_COLOR lv_color_hex(0x0a0a1a)
-#define DIM_COLOR lv_color_hex(0x666688)
+#define DIM_COLOR lv_color_hex(0x9999bb) // brightened from 0x666688 -- low contrast against BG_COLOR was hard to read
 #define ACCENT_COLOR lv_color_hex(0x4488ff)
 #define SYS_COLOR lv_color_hex(0x44cc88)
 #define WARN_COLOR lv_color_hex(0xccaa00)
@@ -41,14 +41,16 @@ static const uint32_t CAT_COLORS[] = {0x4488ff, 0x88aacc, 0x44ddaa, 0xffaa00, 0x
 // Altitude rows -- colors sourced from altitude_color() (geo.h) at a
 // representative altitude in each band, rather than a second hardcoded
 // palette, so this can't drift from what the trails on Map/Radar draw.
-static BarRow _alt_rows[6];
-static const char *ALT_NAMES[] = {"GND", "<5k", "<15k", "<25k", "<35k", "35k+"};
-static const int32_t ALT_SAMPLES[] = {0, 2500, 10000, 20000, 30000, 45000};
+// GND dropped -- ground traffic is excluded from this whole screen (see
+// stats.cpp), so that bucket would always read zero.
+static BarRow _alt_rows[5];
+static const char *ALT_NAMES[] = {"<5k", "<15k", "<25k", "<35k", "35k+"};
+static const int32_t ALT_SAMPLES[] = {2500, 10000, 20000, 30000, 45000};
 
-// Speed rows
-static BarRow _spd_rows[6];
-static const char *SPD_NAMES[] = {"GND", "<200", "<300", "<400", "<500", "500+"};
-static const uint32_t SPD_COLORS[] = {0x666666, 0x4488cc, 0x4488ff, 0x8844ff, 0xcc44ff, 0xff44aa};
+// Speed rows -- GND dropped, same reason as altitude above
+static BarRow _spd_rows[5];
+static const char *SPD_NAMES[] = {"<200", "<300", "<400", "<500", "500+"};
+static const uint32_t SPD_COLORS[] = {0x4488cc, 0x4488ff, 0x8844ff, 0xcc44ff, 0xff44aa};
 
 // Records
 static lv_obj_t *_fastest_val = nullptr;
@@ -71,7 +73,6 @@ static lv_obj_t *_type_labels[5] = {};
 static lv_obj_t *_uptime_val = nullptr;
 static lv_obj_t *_heap_val = nullptr;
 static lv_obj_t *_psram_val = nullptr;
-static lv_obj_t *_watermark_val = nullptr;
 static lv_obj_t *_temp_val = nullptr;
 static lv_obj_t *_fps_val = nullptr;
 static lv_obj_t *_tasks_val = nullptr;
@@ -111,24 +112,26 @@ static lv_obj_t *create_bar(lv_obj_t *parent, int x, int y, lv_color_t color) {
 }
 
 static void create_bar_row(lv_obj_t *parent, BarRow *row, const char *name,
-                           uint32_t color_hex, int x, int y) {
+                           uint32_t color_hex, int x, int y,
+                           const lv_font_t *font = &lv_font_montserrat_14,
+                           int name_off = 42, int bar_off = 70) {
     lv_color_t color = lv_color_hex(color_hex);
 
     row->name_lbl = lv_label_create(parent);
     lv_label_set_text(row->name_lbl, name);
-    lv_obj_set_style_text_font(row->name_lbl, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_font(row->name_lbl, font, 0);
     lv_obj_set_style_text_color(row->name_lbl, color, 0);
     lv_obj_set_pos(row->name_lbl, x, y + 1);
     lv_obj_clear_flag(row->name_lbl, LV_OBJ_FLAG_CLICKABLE);
 
     row->count_lbl = lv_label_create(parent);
     lv_label_set_text(row->count_lbl, "0");
-    lv_obj_set_style_text_font(row->count_lbl, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_font(row->count_lbl, font, 0);
     lv_obj_set_style_text_color(row->count_lbl, lv_color_hex(0xccccdd), 0);
-    lv_obj_set_pos(row->count_lbl, x + 42, y + 1);
+    lv_obj_set_pos(row->count_lbl, x + name_off, y + 1);
     lv_obj_clear_flag(row->count_lbl, LV_OBJ_FLAG_CLICKABLE);
 
-    row->bar = create_bar(parent, x + 70, y, color);
+    row->bar = create_bar(parent, x + bar_off, y, color);
 }
 
 static void update_bar(BarRow *row, int count, int total) {
@@ -167,8 +170,11 @@ static int count_lvgl_objects(lv_obj_t *obj) {
 }
 
 static void refresh_stats(lv_timer_t *t) {
-    if (views_get_active_index() != VIEW_STATS) return;
-
+    // Deliberately not gated on "is Stats the active tab" -- UNIQUE/PEAK are
+    // meant to describe the whole time a location has been selected, not
+    // just however long you happen to have had the Stats screen open. Label
+    // updates on an inactive tileview tile are cheap (nothing to redraw
+    // until it's actually shown), so there's no real cost to always running.
     _list = locations_active_list(_home_list);
     stats_update(_list);
     const SessionStats *s = stats_get();
@@ -184,25 +190,25 @@ static void refresh_stats(lv_timer_t *t) {
         update_bar(&_cat_rows[i], cat_counts[i], cat_total);
     }
 
-    // Altitude bars
-    int alt_counts[] = {s->alt_gnd, s->alt_low, s->alt_med_low,
+    // Altitude bars (ground traffic excluded entirely -- see stats.cpp)
+    int alt_counts[] = {s->alt_low, s->alt_med_low,
                         s->alt_med, s->alt_high, s->alt_very_high};
     int alt_max = 1;
-    for (int i = 0; i < 6; i++) {
+    for (int i = 0; i < 5; i++) {
         if (alt_counts[i] > alt_max) alt_max = alt_counts[i];
     }
-    for (int i = 0; i < 6; i++) {
+    for (int i = 0; i < 5; i++) {
         update_bar(&_alt_rows[i], alt_counts[i], alt_max);
     }
 
-    // Speed bars
-    int spd_counts[] = {s->spd_gnd, s->spd_slow, s->spd_med,
+    // Speed bars (ground traffic excluded entirely -- see stats.cpp)
+    int spd_counts[] = {s->spd_slow, s->spd_med,
                         s->spd_fast, s->spd_very_fast, s->spd_extreme};
     int spd_max = 1;
-    for (int i = 0; i < 6; i++) {
+    for (int i = 0; i < 5; i++) {
         if (spd_counts[i] > spd_max) spd_max = spd_counts[i];
     }
-    for (int i = 0; i < 6; i++) {
+    for (int i = 0; i < 5; i++) {
         update_bar(&_spd_rows[i], spd_counts[i], spd_max);
     }
 
@@ -427,7 +433,9 @@ void stats_view_init(lv_obj_t *parent, AircraftList *list) {
         lv_label_set_text(v, "--");
         lv_obj_set_style_text_font(v, &lv_font_montserrat_14, 0);
         lv_obj_set_style_text_color(v, rec_val, 0);
-        lv_obj_set_pos(v, lx + 68, y);
+        // 80px, not 68 -- "SLOWEST" (widest header, thanks to the W) was
+        // running right up against the value column at the old offset.
+        lv_obj_set_pos(v, lx + 80, y);
         lv_obj_clear_flag(v, LV_OBJ_FLAG_CLICKABLE);
         return v;
     };
@@ -478,46 +486,33 @@ void stats_view_init(lv_obj_t *parent, AircraftList *list) {
     }
 
     // ============================================================
-    // CENTER COLUMN (x=340): Distributions
+    // CENTER COLUMN (x=340): Distributions -- ground traffic excluded (see
+    // stats.cpp), so only 5 rows each now instead of 6. That, plus SYSTEM
+    // moving out (below), freed up enough room to size these up a notch
+    // (16pt instead of 14pt, wider offsets to match) for legibility.
     // ============================================================
     int cx = 340;
 
     // Altitude distribution
     create_section_header(_container, "ALTITUDE", cx, 8);
-    for (int i = 0; i < 6; i++) {
+    for (int i = 0; i < 5; i++) {
         create_bar_row(_container, &_alt_rows[i], ALT_NAMES[i],
                        lv_color_to_u32(altitude_color(ALT_SAMPLES[i])),
-                       cx, 26 + i * 22);
+                       cx, 30 + i * 28, &lv_font_montserrat_16, 52, 88);
     }
 
     // Speed distribution
-    create_section_header(_container, "SPEED", cx, 170);
-    for (int i = 0; i < 6; i++) {
+    create_section_header(_container, "SPEED", cx, 190);
+    for (int i = 0; i < 5; i++) {
         create_bar_row(_container, &_spd_rows[i], SPD_NAMES[i], SPD_COLORS[i],
-                       cx, 188 + i * 22);
+                       cx, 212 + i * 28, &lv_font_montserrat_16, 52, 88);
     }
 
     // ============================================================
-    // CENTER-BOTTOM: System Health (x=340)
-    // ============================================================
-    int sy = 330;
-    create_section_header(_container, "SYSTEM", cx, sy);
-
-    _heap_val = create_stat_pair(_container, "HEAP", cx, sy + 18, SYS_COLOR);
-    _uptime_val = create_stat_pair(_container, "UPTIME", cx + 120, sy + 18, SYS_COLOR);
-    _psram_val = create_stat_pair(_container, "PSRAM", cx, sy + 52, SYS_COLOR);
-
-    // Compact row: TEMP / FPS / TASKS / OBJS
-    int sr2 = sy + 86;
-    _temp_val = create_stat_pair(_container, "TEMP", cx, sr2, SYS_COLOR);
-    _fps_val = create_stat_pair(_container, "FPS", cx + 60, sr2, SYS_COLOR);
-    _tasks_val = create_stat_pair(_container, "TASKS", cx + 110, sr2, SYS_COLOR);
-    _lvgl_objs_val = create_stat_pair(_container, "LVGL", cx + 170, sr2, SYS_COLOR);
-
-    _flash_val = create_stat_pair(_container, "FLASH", cx + 230, sr2, SYS_COLOR);
-
-    // ============================================================
-    // RIGHT COLUMN (x=700): Network
+    // RIGHT COLUMN (x=700): Network, System, Errors -- SYSTEM moved in next
+    // to NETWORK since both are genuinely device-global (unlike the
+    // aircraft-tracking stuff in the left/center columns), rather than
+    // splitting two related sections across two different columns.
     // ============================================================
     int rx = 700;
 
@@ -528,8 +523,23 @@ void stats_view_init(lv_obj_t *parent, AircraftList *list) {
     _bytes_val = create_stat_pair(_container, "RX DATA", rx, 128, SYS_COLOR);
     _latency_val = create_stat_pair(_container, "LATENCY", rx, 162, SYS_COLOR);
 
+    int sy = 210;
+    create_section_header(_container, "SYSTEM", rx, sy);
+
+    _heap_val = create_stat_pair(_container, "HEAP", rx, sy + 18, SYS_COLOR);
+    _uptime_val = create_stat_pair(_container, "UPTIME", rx + 120, sy + 18, SYS_COLOR);
+    _psram_val = create_stat_pair(_container, "PSRAM", rx, sy + 52, SYS_COLOR);
+
+    // Compact row: TEMP / FPS / TASKS / OBJS / FLASH
+    int sr2 = sy + 86;
+    _temp_val = create_stat_pair(_container, "TEMP", rx, sr2, SYS_COLOR);
+    _fps_val = create_stat_pair(_container, "FPS", rx + 60, sr2, SYS_COLOR);
+    _tasks_val = create_stat_pair(_container, "TASKS", rx + 110, sr2, SYS_COLOR);
+    _lvgl_objs_val = create_stat_pair(_container, "LVGL", rx + 170, sr2, SYS_COLOR);
+    _flash_val = create_stat_pair(_container, "FLASH", rx + 230, sr2, SYS_COLOR);
+
     // Error log section
-    int ey = 240;
+    int ey = 350;
     _err_count_lbl = lv_label_create(_container);
     lv_label_set_text(_err_count_lbl, "ERRORS (0)");
     lv_obj_set_style_text_font(_err_count_lbl, &lv_font_montserrat_14, 0);
