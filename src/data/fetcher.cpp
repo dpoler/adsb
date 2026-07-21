@@ -5,6 +5,7 @@
 #include "../data/storage.h"
 #include "../data/locations.h"
 #include "../data/airlines.h"
+#include "../data/enrichment.h"
 #include "../ui/alerts.h"
 #if defined(USE_ETHERNET)
 #include <ETH.h>
@@ -630,6 +631,7 @@ static void location_poll_task(void *param) {
     while (true) {
         location_fetch_poll();
         locations_add_poll();
+        enrichment_poll(); // detail-card aircraft/photo lookups -- see enrichment.cpp
         vTaskDelay(pdMS_TO_TICKS(1500));
     }
 }

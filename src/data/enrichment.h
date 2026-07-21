@@ -22,5 +22,10 @@ void enrichment_init();
 void enrichment_fetch(const char *icao_hex, const char *registration,
                       void (*callback)(AircraftEnrichment *data));
 
+// Drives the in-progress fetch, one stage per call -- call from an existing
+// task's loop (location_poll_task in fetcher.cpp), never spawn a dedicated
+// task for this (see project_p4_heap_constraints memory).
+void enrichment_poll();
+
 // Get cached enrichment (returns nullptr if not yet fetched)
 AircraftEnrichment *enrichment_get_cached(const char *icao_hex);

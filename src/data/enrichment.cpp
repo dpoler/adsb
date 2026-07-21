@@ -27,16 +27,23 @@ static AircraftEnrichment _cache[MAX_CACHE];
 static char _cache_keys[MAX_CACHE][7];
 static int _cache_count = 0;
 
+// Two-stage fetch (adsbdb details, then planespotters photo), driven by
+// enrichment_poll() from location_poll_task's existing loop (fetcher.cpp)
+// instead of a dedicated xTaskCreatePinnedToCore() per tap -- spawning a new
+// task for every detail-card tap was the same anti-pattern that caused the
+// SDIO crashes fixed in the location-picker "add by ICAO" flow (see
+// project_p4_heap_constraints memory). The poll loop's own ~1.5s cadence
+// already gives stage 2 a breather after stage 1 without needing an
+// explicit delay -- each stage runs on its own poll tick.
+enum EnrichStage { STAGE_IDLE, STAGE_1_PENDING, STAGE_2_PENDING };
+static volatile EnrichStage _stage = STAGE_IDLE;
+static char _pending_icao[7];
 static void (*_pending_callback)(AircraftEnrichment *) = nullptr;
-static volatile bool _task_running = false;
+static AircraftEnrichment *_active_entry = nullptr;
 
-// Deferred callback — set by task, delivered by LVGL timer
+// Deferred callback — set by enrichment_poll(), delivered by LVGL timer
 static volatile AircraftEnrichment *_deferred_entry = nullptr;
 static volatile bool _deferred_ready = false;
-
-struct EnrichParams {
-    char icao_hex[7];
-};
 
 AircraftEnrichment *enrichment_get_cached(const char *icao_hex) {
     for (int i = 0; i < _cache_count; i++) {
@@ -93,16 +100,10 @@ static bool fetch_and_parse(HTTPClient &http, JsonDocument &doc) {
     return ok;
 }
 
-static void fetch_task(void *param) {
-    _task_running = true;
-    EnrichParams *params = (EnrichParams *)param;
-    AircraftEnrichment *entry = get_or_create_cache_entry(params->icao_hex);
-    entry->loading = true;
-
-    // Stage 1: Aircraft details from adsbdb
+static void run_stage1(AircraftEnrichment *entry) {
     if (http_mutex_acquire(pdMS_TO_TICKS(8000))) {
         char url[128];
-        snprintf(url, sizeof(url), "https://api.adsbdb.com/v0/aircraft/%s", params->icao_hex);
+        snprintf(url, sizeof(url), "https://api.adsbdb.com/v0/aircraft/%s", _pending_icao);
         HTTPClient http;
         http.begin(url);
         http.setTimeout(5000);
@@ -124,13 +125,13 @@ static void fetch_task(void *param) {
         http_mutex_release();
         notify_callback(entry);
     }
+}
 
-    // Stage 2: Photo from planespotters.net
-    vTaskDelay(pdMS_TO_TICKS(200));
+static void run_stage2(AircraftEnrichment *entry) {
     if (http_mutex_acquire(pdMS_TO_TICKS(8000))) {
         char url[128];
         snprintf(url, sizeof(url),
-                 "https://api.planespotters.net/pub/photos/hex/%s", params->icao_hex);
+                 "https://api.planespotters.net/pub/photos/hex/%s", _pending_icao);
         HTTPClient http;
         http.begin(url);
         http.setTimeout(5000);
@@ -152,10 +153,18 @@ static void fetch_task(void *param) {
     entry->loaded = true;
     entry->loading = false;
     notify_callback(entry);
+}
 
-    free(params);
-    _task_running = false;
-    vTaskDelete(nullptr);
+// Called from location_poll_task's existing loop (fetcher.cpp), ~every 1.5s.
+void enrichment_poll() {
+    if (_stage == STAGE_1_PENDING) {
+        run_stage1(_active_entry);
+        _stage = STAGE_2_PENDING; // runs on the next tick -- no explicit delay needed
+    } else if (_stage == STAGE_2_PENDING) {
+        run_stage2(_active_entry);
+        _stage = STAGE_IDLE;
+        _active_entry = nullptr;
+    }
 }
 
 void enrichment_fetch(const char *icao_hex, const char *registration,
@@ -167,18 +176,20 @@ void enrichment_fetch(const char *icao_hex, const char *registration,
         return;
     }
 
-    // Only one enrichment task at a time
-    if (_task_running) {
-        Serial.println("enrich: skipped (task already running)");
+    // Only one enrichment fetch at a time
+    if (_stage != STAGE_IDLE) {
+        Serial.println("enrich: skipped (fetch already in progress)");
         return;
     }
 
-    _pending_callback = callback;
-    _deferred_ready = false;
+    AircraftEnrichment *entry = get_or_create_cache_entry(icao_hex);
+    entry->loading = true;
 
-    EnrichParams *params = (EnrichParams *)malloc(sizeof(EnrichParams));
-    strlcpy(params->icao_hex, icao_hex, sizeof(params->icao_hex));
-    xTaskCreatePinnedToCore(fetch_task, "enrich", 10240, params, 0, nullptr, 1);
+    _pending_callback = callback;
+    _active_entry = entry;
+    strlcpy(_pending_icao, icao_hex, sizeof(_pending_icao));
+    _deferred_ready = false;
+    _stage = STAGE_1_PENDING;
 }
 
 // Call from LVGL context (main.cpp setup) to install the deferred callback timer
