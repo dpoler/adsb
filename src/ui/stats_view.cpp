@@ -96,7 +96,14 @@ static uint32_t _fps_last_time = 0;
 static uint16_t _fps = 0;
 
 #define BAR_MAX_W 160
-#define BAR_H 14
+#define BAR_H 8 // thinner bars, tightened row pitch below to match
+
+// Uniform vertical rhythm for the whole screen -- every section (bars or
+// plain text) now uses one of these two pitches instead of each section
+// having picked its own spacing independently.
+#define ROW_H 18      // line pitch for 14pt rows (text or bars)
+#define ROW_H_WIDE 20 // line pitch for 16pt rows (center column distributions)
+#define SECTION_GAP 14 // gap from a section's last row to the next header
 
 static lv_obj_t *create_bar(lv_obj_t *parent, int x, int y, lv_color_t color) {
     lv_obj_t *bar = lv_obj_create(parent);
@@ -131,7 +138,9 @@ static void create_bar_row(lv_obj_t *parent, BarRow *row, const char *name,
     lv_obj_set_pos(row->count_lbl, x + name_off, y + 1);
     lv_obj_clear_flag(row->count_lbl, LV_OBJ_FLAG_CLICKABLE);
 
-    row->bar = create_bar(parent, x + bar_off, y, color);
+    // +3 keeps the now-thinner bar vertically centered against the label's
+    // text line instead of hugging its top.
+    row->bar = create_bar(parent, x + bar_off, y + 3, color);
 }
 
 static void update_bar(BarRow *row, int count, int total) {
@@ -426,24 +435,24 @@ void stats_view_init(lv_obj_t *parent, AircraftList *list) {
     lv_obj_clear_flag(subtitle, LV_OBJ_FLAG_CLICKABLE);
 
     // Category breakdown
-    int cat_y = 62;
+    int cat_y = 40 + ROW_H; // same header-to-first-row pitch as every other section
     for (int i = 0; i < 5; i++) {
         // EMRG's wide "M" runs into the count digit at the default 42px
         // offset even though HELI/JETS (same 4 chars) don't -- give it a
         // few extra px.
         int name_off = (i == 4) ? 48 : 42;
         create_bar_row(_container, &_cat_rows[i], CAT_NAMES[i], CAT_COLORS[i],
-                       lx, cat_y + i * 22, &lv_font_montserrat_14, name_off);
+                       lx, cat_y + i * ROW_H, &lv_font_montserrat_14, name_off);
     }
 
     // Records — compact rows with inline header + value
-    int rc_y = 178;
+    int rc_y = cat_y + 5 * ROW_H + SECTION_GAP;
     create_section_header(_container, "RECORDS", lx, rc_y);
 
     lv_color_t rec_hdr = DIM_COLOR;
     lv_color_t rec_val = lv_color_hex(0xccccdd);
-    int rr = rc_y + 18; // first row
-    int rh = 16;         // row height
+    int rr = rc_y + ROW_H; // first row
+    int rh = ROW_H;        // row height
 
     auto make_rec_row = [&](const char *hdr, int y) -> lv_obj_t* {
         lv_obj_t *h = lv_label_create(_container);
@@ -480,35 +489,35 @@ void stats_view_init(lv_obj_t *parent, AircraftList *list) {
     // which are genuinely device-global. UPTIME lives in SYSTEM instead of
     // here for exactly that reason -- it doesn't reset when you switch
     // locations, so grouping it with UNIQUE/PEAK would be misleading.
-    int ss_y = rr + rh * 5 + 10;
+    int ss_y = rr + rh * 5 + SECTION_GAP;
     create_section_header(_container, "AC SEEN", lx, ss_y);
     // Stacked vertically (one inline "HEADER  value" row per stat), matching
     // RECORDS above, rather than side by side.
-    _unique_val = create_inline_row(_container, "UNIQUE", lx, ss_y + 18, ACCENT_COLOR, 80);
-    _peak_val = create_inline_row(_container, "PEAK", lx, ss_y + 18 + rh, ACCENT_COLOR, 80);
+    _unique_val = create_inline_row(_container, "UNIQUE", lx, ss_y + ROW_H, ACCENT_COLOR, 80);
+    _peak_val = create_inline_row(_container, "PEAK", lx, ss_y + ROW_H * 2, ACCENT_COLOR, 80);
 
-    // Top airlines -- extra gap (+66 instead of +56) so this section reads
-    // as distinct from AC SEEN above it.
-    int al_y = ss_y + 66;
+    // Top airlines -- AC SEEN is 2 rows deep (ROW_H * 2) plus its own
+    // header pitch (ROW_H), then the usual gap before the next header.
+    int al_y = ss_y + ROW_H * 3 + SECTION_GAP;
     create_section_header(_container, "TOP AIRLINES", lx, al_y);
     for (int i = 0; i < 5; i++) {
         _airline_labels[i] = lv_label_create(_container);
         lv_label_set_text(_airline_labels[i], "");
         lv_obj_set_style_text_font(_airline_labels[i], &lv_font_montserrat_14, 0);
         lv_obj_set_style_text_color(_airline_labels[i], lv_color_hex(0xccccdd), 0);
-        lv_obj_set_pos(_airline_labels[i], lx + (i % 3) * 80, al_y + 18 + (i / 3) * 18);
+        lv_obj_set_pos(_airline_labels[i], lx + (i % 3) * 80, al_y + ROW_H + (i / 3) * ROW_H);
         lv_obj_clear_flag(_airline_labels[i], LV_OBJ_FLAG_CLICKABLE);
     }
 
-    // Top aircraft types -- same extra gap as above
-    int ty_y = al_y + 66;
+    // Top aircraft types -- same reasoning as above (2 rows of airlines)
+    int ty_y = al_y + ROW_H * 3 + SECTION_GAP;
     create_section_header(_container, "TOP TYPES", lx, ty_y);
     for (int i = 0; i < 5; i++) {
         _type_labels[i] = lv_label_create(_container);
         lv_label_set_text(_type_labels[i], "");
         lv_obj_set_style_text_font(_type_labels[i], &lv_font_montserrat_14, 0);
         lv_obj_set_style_text_color(_type_labels[i], lv_color_hex(0xccccdd), 0);
-        lv_obj_set_pos(_type_labels[i], lx + (i % 3) * 80, ty_y + 18 + (i / 3) * 18);
+        lv_obj_set_pos(_type_labels[i], lx + (i % 3) * 80, ty_y + ROW_H + (i / 3) * ROW_H);
         lv_obj_clear_flag(_type_labels[i], LV_OBJ_FLAG_CLICKABLE);
     }
 
@@ -521,18 +530,20 @@ void stats_view_init(lv_obj_t *parent, AircraftList *list) {
     int cx = 340;
 
     // Altitude distribution
-    create_section_header(_container, "ALTITUDE", cx, 8);
+    int alt_y = 8;
+    create_section_header(_container, "ALTITUDE", cx, alt_y);
     for (int i = 0; i < 5; i++) {
         create_bar_row(_container, &_alt_rows[i], ALT_NAMES[i],
                        lv_color_to_u32(altitude_color(ALT_SAMPLES[i])),
-                       cx, 30 + i * 28, &lv_font_montserrat_16, 52, 88);
+                       cx, alt_y + ROW_H_WIDE + i * ROW_H_WIDE, &lv_font_montserrat_16, 52, 88);
     }
 
     // Speed distribution
-    create_section_header(_container, "SPEED", cx, 190);
+    int spd_y = alt_y + 6 * ROW_H_WIDE + SECTION_GAP;
+    create_section_header(_container, "SPEED", cx, spd_y);
     for (int i = 0; i < 5; i++) {
         create_bar_row(_container, &_spd_rows[i], SPD_NAMES[i], SPD_COLORS[i],
-                       cx, 212 + i * 28, &lv_font_montserrat_16, 52, 88);
+                       cx, spd_y + ROW_H_WIDE + i * ROW_H_WIDE, &lv_font_montserrat_16, 52, 88);
     }
 
     // ============================================================
@@ -545,14 +556,15 @@ void stats_view_init(lv_obj_t *parent, AircraftList *list) {
 
     // Plenty of width in this column for "HEADER  value" on one line --
     // no need to stack the value under the header like SYSTEM below does.
-    create_section_header(_container, "NETWORK", rx, 8);
-    _ip_val = create_inline_row(_container, "IP", rx, 26, SYS_COLOR, 90);
-    _rssi_val = create_inline_row(_container, "LINK", rx, 56, SYS_COLOR, 90);
-    _fetch_val = create_inline_row(_container, "FETCHES", rx, 86, SYS_COLOR, 90);
-    _bytes_val = create_inline_row(_container, "RX DATA", rx, 116, SYS_COLOR, 90);
-    _latency_val = create_inline_row(_container, "LATENCY", rx, 146, SYS_COLOR, 90);
+    int net_y = 8;
+    create_section_header(_container, "NETWORK", rx, net_y);
+    _ip_val = create_inline_row(_container, "IP", rx, net_y + ROW_H, SYS_COLOR, 90);
+    _rssi_val = create_inline_row(_container, "LINK", rx, net_y + ROW_H * 2, SYS_COLOR, 90);
+    _fetch_val = create_inline_row(_container, "FETCHES", rx, net_y + ROW_H * 3, SYS_COLOR, 90);
+    _bytes_val = create_inline_row(_container, "RX DATA", rx, net_y + ROW_H * 4, SYS_COLOR, 90);
+    _latency_val = create_inline_row(_container, "LATENCY", rx, net_y + ROW_H * 5, SYS_COLOR, 90);
 
-    int sy = 210;
+    int sy = net_y + 6 * ROW_H + SECTION_GAP;
     create_section_header(_container, "SYSTEM", rx, sy);
 
     _heap_val = create_stat_pair(_container, "HEAP", rx, sy + 18, SYS_COLOR);
@@ -567,8 +579,8 @@ void stats_view_init(lv_obj_t *parent, AircraftList *list) {
     _lvgl_objs_val = create_stat_pair(_container, "LVGL", rx + 170, sr2, SYS_COLOR);
     _flash_val = create_stat_pair(_container, "FLASH", rx + 230, sr2, SYS_COLOR);
 
-    // Error log section
-    int ey = 350;
+    // Error log section -- 32 is the 2-line stat-pair block height (TEMP row)
+    int ey = sr2 + 32 + SECTION_GAP;
     _err_count_lbl = lv_label_create(_container);
     lv_label_set_text(_err_count_lbl, "ERRORS (0)");
     lv_obj_set_style_text_font(_err_count_lbl, &lv_font_montserrat_14, 0);
