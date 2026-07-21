@@ -9,7 +9,7 @@
 
 #define PANEL_W    320
 #define ROW_H      44
-#define BTN_W      56   // matches status_bar.cpp's CHIP_W -- small enough for "HOME" or a 4-char ICAO, kept uniform with the range/CLR/TAG chips beside it
+#define BTN_W      60   // matches status_bar.cpp's CHIP_W -- same width as every other button in the bar (nav tabs, range/TRAIL/TAG chips)
 #define BTN_H      24   // matches status_bar.cpp's CHIP_H (and the nav tabs' own height)
 
 #define COLOR_BG        lv_color_hex(0x0d0d1a)

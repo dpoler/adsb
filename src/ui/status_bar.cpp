@@ -21,17 +21,17 @@ static lv_obj_t *trails_chip;
 static lv_obj_t *tag_chip;
 static lv_obj_t *tag_lbl;
 
-static const char *NAV_NAMES[] = {"MAP", "RADAR", "LIST", "STATS"};
+static const char *NAV_NAMES[] = {"MAP", "RADAR", "LIST", "STAT"};
 
 #define STATUS_BG_COLOR lv_color_hex(0x0d0d1a)
 #define STATUS_TEXT_COLOR lv_color_hex(0x888899)
 #define STATUS_ACCENT_COLOR lv_color_hex(0x00cc66)
 
-// Shared size/spacing for the location/range/CLR/TAG chips -- kept uniform
-// (and close to the nav tabs' own 60x24) so the bar reads as one consistent
-// row of controls rather than a handful of ad hoc button sizes. The picker
-// chip (location_picker.cpp, a separate compilation unit) mirrors CHIP_H.
-#define CHIP_W 56
+// Shared size/spacing for every button in the bar -- nav tabs and the
+// location/range/TRAIL/TAG chips all use the same width/height so the row
+// reads as one consistent family of controls. The picker chip
+// (location_picker.cpp, a separate compilation unit) mirrors CHIP_W/CHIP_H.
+#define CHIP_W 60
 #define CHIP_H 24
 #define CHIP_GAP 8
 
@@ -55,7 +55,7 @@ lv_obj_t *status_bar_create(lv_obj_t *parent) {
 
     // Aircraft count
     ac_count_label = lv_label_create(bar);
-    lv_label_set_text(ac_count_label, "0 aircraft");
+    lv_label_set_text(ac_count_label, "0 AC");
     lv_obj_set_style_text_color(ac_count_label, STATUS_TEXT_COLOR, 0);
     lv_obj_set_style_text_font(ac_count_label, &lv_font_montserrat_14, 0);
     lv_obj_align(ac_count_label, LV_ALIGN_LEFT_MID, 42, 0);
@@ -89,12 +89,12 @@ lv_obj_t *status_bar_create(lv_obj_t *parent) {
     lv_obj_center(range_lbl);
 
     // Nav buttons (center)
-    int nav_total_w = NUM_VIEWS * 60 + (NUM_VIEWS - 1) * 6;
+    int nav_total_w = NUM_VIEWS * CHIP_W + (NUM_VIEWS - 1) * 6;
     int nav_x0 = (LCD_H_RES - nav_total_w) / 2;
     for (int i = 0; i < NUM_VIEWS; i++) {
         nav_btns[i] = lv_obj_create(bar);
-        lv_obj_set_size(nav_btns[i], 60, 24);
-        lv_obj_set_pos(nav_btns[i], nav_x0 + i * 66, (STATUS_BAR_HEIGHT - 24) / 2);
+        lv_obj_set_size(nav_btns[i], CHIP_W, CHIP_H);
+        lv_obj_set_pos(nav_btns[i], nav_x0 + i * (CHIP_W + 6), (STATUS_BAR_HEIGHT - CHIP_H) / 2);
         lv_obj_set_style_bg_color(nav_btns[i], STATUS_BG_COLOR, 0);
         lv_obj_set_style_bg_opa(nav_btns[i], LV_OPA_COVER, 0);
         lv_obj_set_style_border_color(nav_btns[i], STATUS_TEXT_COLOR, 0);
@@ -150,12 +150,12 @@ lv_obj_t *status_bar_create(lv_obj_t *parent) {
     }, LV_EVENT_CLICKED, nullptr);
 
     lv_obj_t *trails_lbl = lv_label_create(trails_chip);
-    lv_label_set_text(trails_lbl, "CLR");
+    lv_label_set_text(trails_lbl, "TRAIL");
     lv_obj_set_style_text_font(trails_lbl, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(trails_lbl, STATUS_TEXT_COLOR, 0);
     lv_obj_center(trails_lbl);
 
-    // Hide-callsigns chip -- Map/Radar only, same visibility rule as CLR. A
+    // Hide-callsigns chip -- Map/Radar only, same visibility rule as TRAIL. A
     // persistent toggle rather than a momentary action, so it gets a visual
     // "active" state (brighter border/text) instead of always looking the
     // same.
@@ -218,14 +218,14 @@ void status_bar_update(bool wifi_connected, int aircraft_count, uint32_t last_up
     }
 
     // Aircraft count
-    lv_label_set_text_fmt(ac_count_label, "%d aircraft", aircraft_count);
+    lv_label_set_text_fmt(ac_count_label, "%d AC", aircraft_count);
 
     // Last update
     if (last_update_ms == 0) {
         lv_label_set_text(update_label, "No data");
     } else {
         uint32_t ago = (millis() - last_update_ms) / 1000;
-        lv_label_set_text_fmt(update_label, "%lus ago", ago);
+        lv_label_set_text_fmt(update_label, "%lus", ago);
     }
 }
 
