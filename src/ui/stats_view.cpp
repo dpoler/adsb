@@ -141,6 +141,26 @@ static void update_bar(BarRow *row, int count, int total) {
     lv_obj_set_width(row->bar, w);
 }
 
+// Helper for an inline "HEADER  value" row -- header and value share one
+// line (unlike create_stat_pair below, which stacks value under header).
+static lv_obj_t *create_inline_row(lv_obj_t *parent, const char *header, int x, int y,
+                                    lv_color_t val_color, int val_off) {
+    lv_obj_t *h = lv_label_create(parent);
+    lv_label_set_text(h, header);
+    lv_obj_set_style_text_font(h, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_color(h, DIM_COLOR, 0);
+    lv_obj_set_pos(h, x, y);
+    lv_obj_clear_flag(h, LV_OBJ_FLAG_CLICKABLE);
+
+    lv_obj_t *v = lv_label_create(parent);
+    lv_label_set_text(v, "--");
+    lv_obj_set_style_text_font(v, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_color(v, val_color, 0);
+    lv_obj_set_pos(v, x + val_off, y);
+    lv_obj_clear_flag(v, LV_OBJ_FLAG_CLICKABLE);
+    return v;
+}
+
 // Helper to create a label pair (header + value)
 static lv_obj_t *create_stat_pair(lv_obj_t *parent, const char *header, int x, int y,
                                    lv_color_t val_color = lv_color_hex(0x44cc88)) {
@@ -214,31 +234,31 @@ static void refresh_stats(lv_timer_t *t) {
 
     // Records
     if (s->fastest_callsign[0]) {
-        lv_label_set_text_fmt(_fastest_val, "%s %dkt", s->fastest_callsign, s->fastest_speed);
+        lv_label_set_text_fmt(_fastest_val, "%s  %dkt", s->fastest_callsign, s->fastest_speed);
     } else {
         lv_label_set_text(_fastest_val, "--");
     }
     if (s->slowest_callsign[0] && s->slowest_speed < 99999) {
-        lv_label_set_text_fmt(_slowest_val, "%s %dkt", s->slowest_callsign, s->slowest_speed);
+        lv_label_set_text_fmt(_slowest_val, "%s  %dkt", s->slowest_callsign, s->slowest_speed);
     } else {
         lv_label_set_text(_slowest_val, "--");
     }
     if (s->highest_callsign[0] && s->highest_alt > -9999) {
         if (s->highest_alt >= 18000) {
-            lv_label_set_text_fmt(_highest_val, "%s FL%d", s->highest_callsign, s->highest_alt / 100);
+            lv_label_set_text_fmt(_highest_val, "%s  FL%d", s->highest_callsign, s->highest_alt / 100);
         } else {
-            lv_label_set_text_fmt(_highest_val, "%s %dft", s->highest_callsign, s->highest_alt);
+            lv_label_set_text_fmt(_highest_val, "%s  %dft", s->highest_callsign, s->highest_alt);
         }
     } else {
         lv_label_set_text(_highest_val, "--");
     }
     if (s->lowest_callsign[0] && s->lowest_alt < 999999) {
-        lv_label_set_text_fmt(_lowest_val, "%s %dft", s->lowest_callsign, s->lowest_alt);
+        lv_label_set_text_fmt(_lowest_val, "%s  %dft", s->lowest_callsign, s->lowest_alt);
     } else {
         lv_label_set_text(_lowest_val, "--");
     }
     if (s->closest_callsign[0] && s->closest_dist < 9999.0f) {
-        lv_label_set_text_fmt(_closest_val, "%s %.1fnm", s->closest_callsign, (double)s->closest_dist);
+        lv_label_set_text_fmt(_closest_val, "%s  %.1fnm", s->closest_callsign, (double)s->closest_dist);
     } else {
         lv_label_set_text(_closest_val, "--");
     }
@@ -408,8 +428,12 @@ void stats_view_init(lv_obj_t *parent, AircraftList *list) {
     // Category breakdown
     int cat_y = 62;
     for (int i = 0; i < 5; i++) {
+        // EMRG's wide "M" runs into the count digit at the default 42px
+        // offset even though HELI/JETS (same 4 chars) don't -- give it a
+        // few extra px.
+        int name_off = (i == 4) ? 48 : 42;
         create_bar_row(_container, &_cat_rows[i], CAT_NAMES[i], CAT_COLORS[i],
-                       lx, cat_y + i * 22);
+                       lx, cat_y + i * 22, &lv_font_montserrat_14, name_off);
     }
 
     // Records — compact rows with inline header + value
@@ -457,12 +481,15 @@ void stats_view_init(lv_obj_t *parent, AircraftList *list) {
     // here for exactly that reason -- it doesn't reset when you switch
     // locations, so grouping it with UNIQUE/PEAK would be misleading.
     int ss_y = rr + rh * 5 + 10;
-    create_section_header(_container, "SESSION", lx, ss_y);
-    _unique_val = create_stat_pair(_container, "UNIQUE", lx, ss_y + 18, ACCENT_COLOR);
-    _peak_val = create_stat_pair(_container, "PEAK", lx + 80, ss_y + 18, ACCENT_COLOR);
+    create_section_header(_container, "AC SEEN", lx, ss_y);
+    // Stacked vertically (one inline "HEADER  value" row per stat), matching
+    // RECORDS above, rather than side by side.
+    _unique_val = create_inline_row(_container, "UNIQUE", lx, ss_y + 18, ACCENT_COLOR, 80);
+    _peak_val = create_inline_row(_container, "PEAK", lx, ss_y + 18 + rh, ACCENT_COLOR, 80);
 
-    // Top airlines
-    int al_y = ss_y + 56;
+    // Top airlines -- extra gap (+66 instead of +56) so this section reads
+    // as distinct from AC SEEN above it.
+    int al_y = ss_y + 66;
     create_section_header(_container, "TOP AIRLINES", lx, al_y);
     for (int i = 0; i < 5; i++) {
         _airline_labels[i] = lv_label_create(_container);
@@ -473,8 +500,8 @@ void stats_view_init(lv_obj_t *parent, AircraftList *list) {
         lv_obj_clear_flag(_airline_labels[i], LV_OBJ_FLAG_CLICKABLE);
     }
 
-    // Top aircraft types
-    int ty_y = al_y + 56;
+    // Top aircraft types -- same extra gap as above
+    int ty_y = al_y + 66;
     create_section_header(_container, "TOP TYPES", lx, ty_y);
     for (int i = 0; i < 5; i++) {
         _type_labels[i] = lv_label_create(_container);
@@ -516,12 +543,14 @@ void stats_view_init(lv_obj_t *parent, AircraftList *list) {
     // ============================================================
     int rx = 700;
 
+    // Plenty of width in this column for "HEADER  value" on one line --
+    // no need to stack the value under the header like SYSTEM below does.
     create_section_header(_container, "NETWORK", rx, 8);
-    _ip_val = create_stat_pair(_container, "IP", rx, 26, SYS_COLOR);
-    _rssi_val = create_stat_pair(_container, "LINK", rx, 60, SYS_COLOR);
-    _fetch_val = create_stat_pair(_container, "FETCHES", rx, 94, SYS_COLOR);
-    _bytes_val = create_stat_pair(_container, "RX DATA", rx, 128, SYS_COLOR);
-    _latency_val = create_stat_pair(_container, "LATENCY", rx, 162, SYS_COLOR);
+    _ip_val = create_inline_row(_container, "IP", rx, 26, SYS_COLOR, 90);
+    _rssi_val = create_inline_row(_container, "LINK", rx, 56, SYS_COLOR, 90);
+    _fetch_val = create_inline_row(_container, "FETCHES", rx, 86, SYS_COLOR, 90);
+    _bytes_val = create_inline_row(_container, "RX DATA", rx, 116, SYS_COLOR, 90);
+    _latency_val = create_inline_row(_container, "LATENCY", rx, 146, SYS_COLOR, 90);
 
     int sy = 210;
     create_section_header(_container, "SYSTEM", rx, sy);
