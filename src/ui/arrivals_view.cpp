@@ -222,7 +222,10 @@ static void update_filter_visuals() {
 
 static void update_gnd_visual() {
     if (!_gnd_btn) return;
-    if (g_config.hide_ground) {
+    // Lit = ground traffic currently SHOWN, matching every other filter
+    // button's convention (lit = "you're seeing more of this"), not the
+    // hide_ground boolean's own sense directly.
+    if (!g_config.hide_ground) {
         lv_obj_set_style_bg_color(_gnd_btn, COLOR_GND, 0);
         lv_obj_set_style_bg_opa(_gnd_btn, LV_OPA_COVER, 0);
         lv_obj_set_style_border_color(_gnd_btn, lv_color_hex(0xffffff), 0);
