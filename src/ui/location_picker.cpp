@@ -9,8 +9,8 @@
 
 #define PANEL_W    320
 #define ROW_H      44
-#define BTN_W      56   // small enough for "HOME" or a 4-char ICAO -- lives inline in the status bar now, not the filter column
-#define BTN_H      22
+#define BTN_W      56   // matches status_bar.cpp's CHIP_W -- small enough for "HOME" or a 4-char ICAO, kept uniform with the range/CLR/TAG chips beside it
+#define BTN_H      24   // matches status_bar.cpp's CHIP_H (and the nav tabs' own height)
 
 #define COLOR_BG        lv_color_hex(0x0d0d1a)
 #define COLOR_PANEL     lv_color_hex(0x14142a)
@@ -337,7 +337,7 @@ void location_picker_init(lv_obj_t *screen) {
     // the per-view filter-button column -- both put it in the way of view
     // content; the status bar is the one piece of chrome every view shares,
     // so this is where it stays regardless of which tab is active.
-    lv_obj_set_pos(_picker_btn, 140, (STATUS_BAR_HEIGHT - BTN_H) / 2);
+    lv_obj_set_pos(_picker_btn, LOCATION_CHIP_X, (STATUS_BAR_HEIGHT - BTN_H) / 2);
     lv_obj_set_style_bg_color(_picker_btn, COLOR_ROW, 0);
     lv_obj_set_style_bg_opa(_picker_btn, LV_OPA_COVER, 0);
     lv_obj_set_style_border_color(_picker_btn, COLOR_ACCENT, 0);

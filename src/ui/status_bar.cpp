@@ -27,6 +27,14 @@ static const char *NAV_NAMES[] = {"MAP", "RADAR", "LIST", "STATS"};
 #define STATUS_TEXT_COLOR lv_color_hex(0x888899)
 #define STATUS_ACCENT_COLOR lv_color_hex(0x00cc66)
 
+// Shared size/spacing for the location/range/CLR/TAG chips -- kept uniform
+// (and close to the nav tabs' own 60x24) so the bar reads as one consistent
+// row of controls rather than a handful of ad hoc button sizes. The picker
+// chip (location_picker.cpp, a separate compilation unit) mirrors CHIP_H.
+#define CHIP_W 56
+#define CHIP_H 24
+#define CHIP_GAP 8
+
 lv_obj_t *status_bar_create(lv_obj_t *parent) {
     lv_obj_t *bar = lv_obj_create(parent);
     lv_obj_set_size(bar, LCD_H_RES, STATUS_BAR_HEIGHT);
@@ -59,8 +67,8 @@ lv_obj_t *status_bar_create(lv_obj_t *parent) {
     // change and re-render, so this chip only has to cycle the shared value
     // and update its own label -- no per-view signaling needed.
     range_chip = lv_obj_create(bar);
-    lv_obj_set_size(range_chip, 46, 22);
-    lv_obj_set_pos(range_chip, 206, (STATUS_BAR_HEIGHT - 22) / 2);
+    lv_obj_set_size(range_chip, CHIP_W, CHIP_H);
+    lv_obj_set_pos(range_chip, LOCATION_CHIP_X + CHIP_W + CHIP_GAP, (STATUS_BAR_HEIGHT - CHIP_H) / 2);
     lv_obj_set_style_bg_color(range_chip, lv_color_hex(0x14142a), 0);
     lv_obj_set_style_bg_opa(range_chip, LV_OPA_COVER, 0);
     lv_obj_set_style_border_color(range_chip, STATUS_TEXT_COLOR, 0);
@@ -122,10 +130,11 @@ lv_obj_t *status_bar_create(lv_obj_t *parent) {
 
     // Clear-trails chip -- Map/Radar only (Arrivals/Stats have no trails to
     // clear). Dispatches to whichever of those two is currently active;
-    // status_bar_set_active_dot() shows/hides it per view.
+    // status_bar_set_active_dot() shows/hides it per view. Starts one
+    // CHIP_W past the nav group as a buffer clearing the AUTO indicator.
     trails_chip = lv_obj_create(bar);
-    lv_obj_set_size(trails_chip, 36, 22);
-    lv_obj_set_pos(trails_chip, nav_x0 + nav_total_w + 48, (STATUS_BAR_HEIGHT - 22) / 2);
+    lv_obj_set_size(trails_chip, CHIP_W, CHIP_H);
+    lv_obj_set_pos(trails_chip, nav_x0 + nav_total_w + CHIP_W, (STATUS_BAR_HEIGHT - CHIP_H) / 2);
     lv_obj_set_style_bg_color(trails_chip, lv_color_hex(0x0a0a1a), 0);
     lv_obj_set_style_bg_opa(trails_chip, LV_OPA_COVER, 0);
     lv_obj_set_style_border_color(trails_chip, STATUS_TEXT_COLOR, 0);
@@ -151,8 +160,8 @@ lv_obj_t *status_bar_create(lv_obj_t *parent) {
     // "active" state (brighter border/text) instead of always looking the
     // same.
     tag_chip = lv_obj_create(bar);
-    lv_obj_set_size(tag_chip, 40, 22);
-    lv_obj_set_pos(tag_chip, nav_x0 + nav_total_w + 48 + 36 + 8, (STATUS_BAR_HEIGHT - 22) / 2);
+    lv_obj_set_size(tag_chip, CHIP_W, CHIP_H);
+    lv_obj_set_pos(tag_chip, nav_x0 + nav_total_w + CHIP_W + CHIP_W + CHIP_GAP, (STATUS_BAR_HEIGHT - CHIP_H) / 2);
     lv_obj_set_style_bg_color(tag_chip, lv_color_hex(0x0a0a1a), 0);
     lv_obj_set_style_bg_opa(tag_chip, LV_OPA_COVER, 0);
     lv_obj_set_style_border_color(tag_chip, STATUS_TEXT_COLOR, 0);

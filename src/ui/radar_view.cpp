@@ -31,7 +31,7 @@ static uint32_t _trails_cleared_at = 0;
 // don't touch the status bar directly above the canvas -- without this the
 // radius is scaled to reach exactly y=0 (zero gap). Shrinks the effective
 // drawing height and recenters down instead of touching the top edge.
-#define RADAR_TOP_MARGIN 34
+#define RADAR_TOP_MARGIN 24
 #define RADAR_CY (RADAR_H / 2 + RADAR_TOP_MARGIN / 2)
 #define RADAR_R ((RADAR_H - RADAR_TOP_MARGIN) / 2 - 10)  // max radius in pixels
 

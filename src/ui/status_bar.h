@@ -6,7 +6,12 @@
 // needs to know where its own canvas starts (map/radar/arrivals/stats) or
 // how tall the popover overlays below it can be (location_picker) includes
 // this instead of hardcoding the number.
-#define STATUS_BAR_HEIGHT 38
+#define STATUS_BAR_HEIGHT 48
+
+// x position of the location picker chip (location_picker.cpp) -- shared
+// here so status_bar.cpp's range chip (which sits directly beside it) can
+// stay in sync without hardcoding the picker's position a second time.
+#define LOCATION_CHIP_X 140
 
 // Create the status bar at the top of the screen (STATUS_BAR_HEIGHT tall)
 lv_obj_t *status_bar_create(lv_obj_t *parent);
