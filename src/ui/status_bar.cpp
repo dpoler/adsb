@@ -4,6 +4,7 @@
 #include "range.h"
 #include "map_view.h"
 #include "radar_view.h"
+#include "display_prefs.h"
 #include "../pins_config.h"
 #include "../data/fetcher.h"
 
@@ -17,6 +18,8 @@ static lv_obj_t *auto_label;
 static lv_obj_t *range_chip;
 static lv_obj_t *range_lbl;
 static lv_obj_t *trails_chip;
+static lv_obj_t *tag_chip;
+static lv_obj_t *tag_lbl;
 
 static const char *NAV_NAMES[] = {"MAP", "RADAR", "LIST", "STATS"};
 
@@ -143,6 +146,35 @@ lv_obj_t *status_bar_create(lv_obj_t *parent) {
     lv_obj_set_style_text_color(trails_lbl, STATUS_TEXT_COLOR, 0);
     lv_obj_center(trails_lbl);
 
+    // Hide-callsigns chip -- Map/Radar only, same visibility rule as CLR. A
+    // persistent toggle rather than a momentary action, so it gets a visual
+    // "active" state (brighter border/text) instead of always looking the
+    // same.
+    tag_chip = lv_obj_create(bar);
+    lv_obj_set_size(tag_chip, 40, 22);
+    lv_obj_set_pos(tag_chip, nav_x0 + nav_total_w + 48 + 36 + 8, (STATUS_BAR_HEIGHT - 22) / 2);
+    lv_obj_set_style_bg_color(tag_chip, lv_color_hex(0x0a0a1a), 0);
+    lv_obj_set_style_bg_opa(tag_chip, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_color(tag_chip, STATUS_TEXT_COLOR, 0);
+    lv_obj_set_style_border_width(tag_chip, 1, 0);
+    lv_obj_set_style_border_opa(tag_chip, LV_OPA_40, 0);
+    lv_obj_set_style_radius(tag_chip, 4, 0);
+    lv_obj_set_style_pad_all(tag_chip, 0, 0);
+    lv_obj_clear_flag(tag_chip, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_event_cb(tag_chip, [](lv_event_t *e) {
+        callsigns_hidden_toggle();
+        bool hidden = callsigns_hidden();
+        lv_obj_set_style_border_color(tag_chip, hidden ? lv_color_hex(0xccccdd) : STATUS_TEXT_COLOR, 0);
+        lv_obj_set_style_border_opa(tag_chip, hidden ? LV_OPA_COVER : LV_OPA_40, 0);
+        lv_obj_set_style_text_color(tag_lbl, hidden ? lv_color_hex(0xccccdd) : STATUS_TEXT_COLOR, 0);
+    }, LV_EVENT_CLICKED, nullptr);
+
+    tag_lbl = lv_label_create(tag_chip);
+    lv_label_set_text(tag_lbl, "TAG");
+    lv_obj_set_style_text_font(tag_lbl, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_color(tag_lbl, STATUS_TEXT_COLOR, 0);
+    lv_obj_center(tag_lbl);
+
     // Gear icon (right side, before update label)
     gear_icon = lv_label_create(bar);
     lv_label_set_text(gear_icon, LV_SYMBOL_SETTINGS);
@@ -209,9 +241,12 @@ void status_bar_set_active_dot(int view_index) {
     if (view_index == VIEW_STATS) lv_obj_add_flag(range_chip, LV_OBJ_FLAG_HIDDEN);
     else lv_obj_clear_flag(range_chip, LV_OBJ_FLAG_HIDDEN);
 
-    // Trails only exist on Map/Radar
-    if (view_index == VIEW_MAP || view_index == VIEW_RADAR) lv_obj_clear_flag(trails_chip, LV_OBJ_FLAG_HIDDEN);
+    // Trails and callsign labels only exist on Map/Radar
+    bool map_or_radar = (view_index == VIEW_MAP || view_index == VIEW_RADAR);
+    if (map_or_radar) lv_obj_clear_flag(trails_chip, LV_OBJ_FLAG_HIDDEN);
     else lv_obj_add_flag(trails_chip, LV_OBJ_FLAG_HIDDEN);
+    if (map_or_radar) lv_obj_clear_flag(tag_chip, LV_OBJ_FLAG_HIDDEN);
+    else lv_obj_add_flag(tag_chip, LV_OBJ_FLAG_HIDDEN);
 }
 
 void status_bar_set_auto_indicator(bool visible) {

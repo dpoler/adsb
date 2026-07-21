@@ -4,6 +4,7 @@
 #include "status_bar.h"
 #include "detail_card.h"
 #include "filters.h"
+#include "display_prefs.h"
 #include "../pins_config.h"
 #include "../data/storage.h"
 #include "../data/locations.h"
@@ -248,19 +249,21 @@ static void draw_blips(lv_layer_t *layer) {
 
             if (behind < PAINT_DETAIL_DEG) {
                 // === PAINT ZONE: expanded detail ===
-                // Line 1: Callsign
-                const char *cs = ac.callsign[0] ? ac.callsign : ac.icao_hex;
-                char line1[48];
-                strlcpy(line1, cs, sizeof(line1));
-                lv_draw_label_dsc_t l1;
-                lv_draw_label_dsc_init(&l1);
-                l1.color = color;
-                l1.font = &lv_font_montserrat_14;
-                l1.opa = LV_OPA_COVER;
-                l1.text = line1;
-                lv_area_t a1 = {(lv_coord_t)(sx + 8), (lv_coord_t)(sy - 28),
-                                (lv_coord_t)(sx + 280), (lv_coord_t)(sy - 14)};
-                lv_draw_label(layer, &l1, &a1);
+                // Line 1: Callsign -- toggled off by the status bar's TAG chip
+                if (!callsigns_hidden()) {
+                    const char *cs = ac.callsign[0] ? ac.callsign : ac.icao_hex;
+                    char line1[48];
+                    strlcpy(line1, cs, sizeof(line1));
+                    lv_draw_label_dsc_t l1;
+                    lv_draw_label_dsc_init(&l1);
+                    l1.color = color;
+                    l1.font = &lv_font_montserrat_14;
+                    l1.opa = LV_OPA_COVER;
+                    l1.text = line1;
+                    lv_area_t a1 = {(lv_coord_t)(sx + 8), (lv_coord_t)(sy - 28),
+                                    (lv_coord_t)(sx + 280), (lv_coord_t)(sy - 14)};
+                    lv_draw_label(layer, &l1, &a1);
+                }
 
                 // Line 2: Operator or type description
                 char line2[48] = {};
@@ -319,18 +322,20 @@ static void draw_blips(lv_layer_t *layer) {
                 else if (ac.altitude >= 18000) snprintf(alt_str, sizeof(alt_str), "FL%d", ac.altitude / 100);
                 else snprintf(alt_str, sizeof(alt_str), "%d'", ac.altitude / 100 * 100);
 
-                // Line 1: callsign
-                char top[36];
-                strlcpy(top, cs, sizeof(top));
-                lv_draw_label_dsc_t lbl;
-                lv_draw_label_dsc_init(&lbl);
-                lbl.color = color;
-                lbl.font = &lv_font_montserrat_14;
-                lbl.opa = lbl_opa;
-                lbl.text = top;
-                lv_area_t la1 = {(lv_coord_t)(sx + 8), (lv_coord_t)(sy - 7),
-                                  (lv_coord_t)(sx + 200), (lv_coord_t)(sy + 7)};
-                lv_draw_label(layer, &lbl, &la1);
+                // Line 1: callsign -- toggled off by the status bar's TAG chip
+                if (!callsigns_hidden()) {
+                    char top[36];
+                    strlcpy(top, cs, sizeof(top));
+                    lv_draw_label_dsc_t lbl;
+                    lv_draw_label_dsc_init(&lbl);
+                    lbl.color = color;
+                    lbl.font = &lv_font_montserrat_14;
+                    lbl.opa = lbl_opa;
+                    lbl.text = top;
+                    lv_area_t la1 = {(lv_coord_t)(sx + 8), (lv_coord_t)(sy - 7),
+                                      (lv_coord_t)(sx + 200), (lv_coord_t)(sy + 7)};
+                    lv_draw_label(layer, &lbl, &la1);
+                }
 
                 // Line 2: alt + speed (dimmer)
                 char info[24];

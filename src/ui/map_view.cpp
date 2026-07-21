@@ -5,6 +5,7 @@
 #include "status_bar.h"
 #include "range.h"
 #include "filters.h"
+#include "display_prefs.h"
 #include "aircraft_icons.h"
 // #include "tile_cache.h" // disabled: tiles broken on ESP32-P4
 #include "../pins_config.h"
@@ -601,17 +602,19 @@ static void draw_aircraft(lv_layer_t *layer) {
             lv_draw_arc(layer, &ring);
         }
 
-        // Draw callsign label
-        const char *label_text = ac.callsign[0] ? ac.callsign : ac.icao_hex;
-        lv_draw_label_dsc_t lbl_dsc;
-        lv_draw_label_dsc_init(&lbl_dsc);
-        lbl_dsc.color = color;
-        lbl_dsc.font = &lv_font_montserrat_14;
-        lbl_dsc.opa = (uint8_t)((ac_opa * LV_OPA_80) / 255);
-        lv_area_t lbl_area = {(lv_coord_t)(sx + 12), (lv_coord_t)(sy - 7),
-                               (lv_coord_t)(sx + 130), (lv_coord_t)(sy + 10)};
-        lbl_dsc.text = label_text;
-        lv_draw_label(layer, &lbl_dsc, &lbl_area);
+        // Draw callsign label -- toggled off by the status bar's TAG chip
+        if (!callsigns_hidden()) {
+            const char *label_text = ac.callsign[0] ? ac.callsign : ac.icao_hex;
+            lv_draw_label_dsc_t lbl_dsc;
+            lv_draw_label_dsc_init(&lbl_dsc);
+            lbl_dsc.color = color;
+            lbl_dsc.font = &lv_font_montserrat_14;
+            lbl_dsc.opa = (uint8_t)((ac_opa * LV_OPA_80) / 255);
+            lv_area_t lbl_area = {(lv_coord_t)(sx + 12), (lv_coord_t)(sy - 7),
+                                   (lv_coord_t)(sx + 130), (lv_coord_t)(sy + 10)};
+            lbl_dsc.text = label_text;
+            lv_draw_label(layer, &lbl_dsc, &lbl_area);
+        }
     }
 
     _drawn_count = drawn;
