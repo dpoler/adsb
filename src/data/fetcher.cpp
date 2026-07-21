@@ -13,6 +13,9 @@
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
 #include <esp_heap_caps.h>
+#ifdef CONFIG_IDF_TARGET_ESP32P4
+#include <esp32-hal-hosted.h> // ESP-Hosted host<->C6 co-processor version check, P4-only (SDIO link) -- see project_p4_heap_constraints memory
+#endif
 
 // PSRAM allocator for ArduinoJson — keeps internal RAM free for SDIO/WiFi buffers
 struct PsramAllocator : ArduinoJson::Allocator {
@@ -77,6 +80,21 @@ static bool wifi_connect_with_timeout(uint32_t timeout_ms) {
     uint8_t *bssid = WiFi.BSSID();
     Serial.printf("\nConnected to BSSID %02x:%02x:%02x:%02x:%02x:%02x  RSSI %d dBm\n",
         bssid[0], bssid[1], bssid[2], bssid[3], bssid[4], bssid[5], WiFi.RSSI());
+
+#ifdef CONFIG_IDF_TARGET_ESP32P4
+    // Read-only version check -- does NOT trigger hostedUpdate()/reflash, just
+    // logs whether the C6 co-processor firmware still matches what this
+    // Arduino-ESP32 core expects. A drift here (e.g. from a future platform
+    // bump on the P4 side without re-running the C6 updater) is a known
+    // contributor to SDIO instability -- see project_p4_heap_constraints memory.
+    uint32_t hmaj, hmin, hpat, smaj, smin, spat;
+    hostedGetHostVersion(&hmaj, &hmin, &hpat);
+    hostedGetSlaveVersion(&smaj, &smin, &spat);
+    Serial.printf("ESP-Hosted versions: host v%lu.%lu.%lu, C6 co-processor v%lu.%lu.%lu%s\n",
+        hmaj, hmin, hpat, smaj, smin, spat,
+        hostedHasUpdate() ? "  <-- MISMATCH, co-processor firmware is out of date" : "");
+#endif
+
     return true;
 }
 
