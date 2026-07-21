@@ -9,8 +9,8 @@
 
 #define PANEL_W    320
 #define ROW_H      44
-#define BTN_W      64   // matches the filter-button column width (map/radar/arrivals all use CANVAS_W-64-8) so this sits flush at the top of that stack
-#define BTN_H      26
+#define BTN_W      56   // small enough for "HOME" or a 4-char ICAO -- lives inline in the status bar now, not the filter column
+#define BTN_H      22
 
 #define COLOR_BG        lv_color_hex(0x0d0d1a)
 #define COLOR_PANEL     lv_color_hex(0x14142a)
@@ -329,13 +329,15 @@ static void build_add_view() {
 void location_picker_init(lv_obj_t *screen) {
     _picker_btn = lv_obj_create(screen);
     lv_obj_set_size(_picker_btn, BTN_W, BTN_H);
-    // Right edge, directly above the filter-button stack that map_view.cpp/
-    // radar_view.cpp/arrivals_view.cpp each build independently at btn_x =
-    // CANVAS_W-64-8, btn_y0 = 109 within their canvas (139 absolute, since
-    // the canvas starts below the 30px status bar) -- keep this in sync if
-    // that geometry ever changes. Was top-left/floating before; moved here
-    // since it was in the way of the map/canvas content.
-    lv_obj_set_pos(_picker_btn, LCD_H_RES - BTN_W - 8, 139 - BTN_H - 14);
+    // Lives inline in the status bar itself now -- in the empty gap between
+    // the aircraft count and the nav tabs. _picker_btn is created on `screen`
+    // (same as before) after status_bar_create() runs in main.cpp, so it
+    // still draws on top of the bar without needing to reparent into it.
+    // Previously floated top-left over the canvas, then briefly lived atop
+    // the per-view filter-button column -- both put it in the way of view
+    // content; the status bar is the one piece of chrome every view shares,
+    // so this is where it stays regardless of which tab is active.
+    lv_obj_set_pos(_picker_btn, 140, (STATUS_BAR_HEIGHT - BTN_H) / 2);
     lv_obj_set_style_bg_color(_picker_btn, COLOR_ROW, 0);
     lv_obj_set_style_bg_opa(_picker_btn, LV_OPA_COVER, 0);
     lv_obj_set_style_border_color(_picker_btn, COLOR_ACCENT, 0);
