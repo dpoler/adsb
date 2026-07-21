@@ -512,34 +512,10 @@ void radar_view_init(lv_obj_t *parent, AircraftList *list) {
         }
     }
 
-    // Clear trails — one-tap, right edge, in the gap between the filter
-    // button stack and the bottom of the canvas. Range is now a shared chip
-    // in the status bar (status_bar.cpp) -- this view still tracks
-    // range_get_nm() itself below to keep _proj.radius_nm in sync.
-    {
-        lv_obj_t *clr_btn = lv_obj_create(parent);
-        lv_obj_set_size(clr_btn, 64, 40);
-        lv_obj_set_pos(clr_btn, RADAR_W - 64 - 8, RADAR_H - 28 - 40 - 20);
-        lv_obj_set_style_bg_color(clr_btn, lv_color_hex(0x0a0a1a), 0);
-        lv_obj_set_style_bg_opa(clr_btn, LV_OPA_70, 0);
-        lv_obj_set_style_border_color(clr_btn, lv_color_hex(0x888899), 0);
-        lv_obj_set_style_border_width(clr_btn, 1, 0);
-        lv_obj_set_style_border_opa(clr_btn, LV_OPA_40, 0);
-        lv_obj_set_style_radius(clr_btn, 6, 0);
-        lv_obj_set_style_pad_all(clr_btn, 0, 0);
-        lv_obj_clear_flag(clr_btn, LV_OBJ_FLAG_SCROLLABLE);
-        lv_obj_clear_flag(clr_btn, LV_OBJ_FLAG_SCROLL_CHAIN);
-        lv_obj_add_event_cb(clr_btn, [](lv_event_t *e) {
-            _filter_just_clicked = true; // reuse the same guard -- prevents the tap-elsewhere handler from also firing
-            _trails_cleared_at = millis(); // this view's own cutoff -- doesn't touch shared trail data, so Map is unaffected
-            lv_obj_invalidate(_radar_obj);
-        }, LV_EVENT_CLICKED, nullptr);
-
-        lv_obj_t *clr_lbl = lv_label_create(clr_btn);
-        lv_label_set_text(clr_lbl, LV_SYMBOL_TRASH);
-        lv_obj_set_style_text_color(clr_lbl, lv_color_hex(0x888899), 0);
-        lv_obj_center(clr_lbl);
-    }
+    // Clear-trails and range are now shared chips in the status bar
+    // (status_bar.cpp) -- see radar_view_clear_trails() below. This view
+    // still tracks range_get_nm() itself further down to keep
+    // _proj.radius_nm in sync.
 
     // Animate sweep — always update angle, but only redraw when visible and not touching
     _last_sweep_ms = millis();
@@ -591,6 +567,15 @@ void radar_view_init(lv_obj_t *parent, AircraftList *list) {
 }
 
 void radar_view_update() {
+    if (_radar_obj) lv_obj_invalidate(_radar_obj);
+}
+
+// Called from the shared status bar chip (status_bar.cpp) when Radar is the
+// active tab. Only affects this view's own drawing cutoff -- Map and Radar
+// share the same underlying Aircraft/TrailPoint data, so this must never
+// mutate it (that would clear both views at once).
+void radar_view_clear_trails() {
+    _trails_cleared_at = millis();
     if (_radar_obj) lv_obj_invalidate(_radar_obj);
 }
 

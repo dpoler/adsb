@@ -2,6 +2,8 @@
 #include "status_bar.h"
 #include "views.h"
 #include "range.h"
+#include "map_view.h"
+#include "radar_view.h"
 #include "../pins_config.h"
 #include "../data/fetcher.h"
 
@@ -14,6 +16,7 @@ static lv_obj_t *gear_icon;
 static lv_obj_t *auto_label;
 static lv_obj_t *range_chip;
 static lv_obj_t *range_lbl;
+static lv_obj_t *trails_chip;
 
 static const char *NAV_NAMES[] = {"MAP", "RADAR", "LIST", "STATS"};
 
@@ -114,6 +117,32 @@ lv_obj_t *status_bar_create(lv_obj_t *parent) {
     lv_obj_set_pos(auto_label, nav_x0 + nav_total_w + 8, (STATUS_BAR_HEIGHT - 16) / 2);
     lv_obj_clear_flag(auto_label, LV_OBJ_FLAG_CLICKABLE);
 
+    // Clear-trails chip -- Map/Radar only (Arrivals/Stats have no trails to
+    // clear). Dispatches to whichever of those two is currently active;
+    // status_bar_set_active_dot() shows/hides it per view.
+    trails_chip = lv_obj_create(bar);
+    lv_obj_set_size(trails_chip, 36, 22);
+    lv_obj_set_pos(trails_chip, nav_x0 + nav_total_w + 48, (STATUS_BAR_HEIGHT - 22) / 2);
+    lv_obj_set_style_bg_color(trails_chip, lv_color_hex(0x0a0a1a), 0);
+    lv_obj_set_style_bg_opa(trails_chip, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_color(trails_chip, STATUS_TEXT_COLOR, 0);
+    lv_obj_set_style_border_width(trails_chip, 1, 0);
+    lv_obj_set_style_border_opa(trails_chip, LV_OPA_40, 0);
+    lv_obj_set_style_radius(trails_chip, 4, 0);
+    lv_obj_set_style_pad_all(trails_chip, 0, 0);
+    lv_obj_clear_flag(trails_chip, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_event_cb(trails_chip, [](lv_event_t *e) {
+        int v = views_get_active_index();
+        if (v == VIEW_MAP) map_view_clear_trails();
+        else if (v == VIEW_RADAR) radar_view_clear_trails();
+    }, LV_EVENT_CLICKED, nullptr);
+
+    lv_obj_t *trails_lbl = lv_label_create(trails_chip);
+    lv_label_set_text(trails_lbl, "CLR");
+    lv_obj_set_style_text_font(trails_lbl, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_color(trails_lbl, STATUS_TEXT_COLOR, 0);
+    lv_obj_center(trails_lbl);
+
     // Gear icon (right side, before update label)
     gear_icon = lv_label_create(bar);
     lv_label_set_text(gear_icon, LV_SYMBOL_SETTINGS);
@@ -179,6 +208,10 @@ void status_bar_set_active_dot(int view_index) {
     // Range doesn't apply to Stats
     if (view_index == VIEW_STATS) lv_obj_add_flag(range_chip, LV_OBJ_FLAG_HIDDEN);
     else lv_obj_clear_flag(range_chip, LV_OBJ_FLAG_HIDDEN);
+
+    // Trails only exist on Map/Radar
+    if (view_index == VIEW_MAP || view_index == VIEW_RADAR) lv_obj_clear_flag(trails_chip, LV_OBJ_FLAG_HIDDEN);
+    else lv_obj_add_flag(trails_chip, LV_OBJ_FLAG_HIDDEN);
 }
 
 void status_bar_set_auto_indicator(bool visible) {

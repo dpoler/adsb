@@ -15,3 +15,6 @@ void map_view_track(const char *icao_hex);
 
 // Number of aircraft drawn in the last frame (matches what's visible on screen)
 int map_view_drawn_count();
+
+// Clear trails on this view only -- see status_bar.cpp's shared CLR chip
+void map_view_clear_trails();
