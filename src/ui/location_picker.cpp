@@ -2,6 +2,7 @@
 #include "../data/locations.h"
 #include "../data/storage.h"
 #include "../pins_config.h"
+#include "status_bar.h"
 #include <Arduino.h>
 #include <cstring>
 #include <cctype>
@@ -79,8 +80,8 @@ static void open_overlay() {
     if (_overlay) return;
 
     _overlay = lv_obj_create(lv_screen_active());
-    lv_obj_set_size(_overlay, LCD_H_RES, LCD_V_RES - 30);
-    lv_obj_set_pos(_overlay, 0, 30);
+    lv_obj_set_size(_overlay, LCD_H_RES, LCD_V_RES - STATUS_BAR_HEIGHT);
+    lv_obj_set_pos(_overlay, 0, STATUS_BAR_HEIGHT);
     lv_obj_set_style_bg_color(_overlay, lv_color_hex(0x000000), 0);
     lv_obj_set_style_bg_opa(_overlay, LV_OPA_70, 0);
     lv_obj_set_style_border_width(_overlay, 0, 0);
@@ -146,7 +147,7 @@ static void build_list_view() {
 
     int rows = 1 + locations_count() + 1; // Home + saved + "Add" row
     int panel_h = rows * ROW_H + 8;
-    int max_h = LCD_V_RES - 30 - 16;
+    int max_h = LCD_V_RES - STATUS_BAR_HEIGHT - 16;
     if (panel_h > max_h) panel_h = max_h;
 
     _panel = lv_obj_create(_overlay);

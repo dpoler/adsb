@@ -2,6 +2,7 @@
 #include "map_view.h"
 #include "detail_card.h"
 #include "views.h"
+#include "status_bar.h"
 #include "range.h"
 #include "filters.h"
 #include "aircraft_icons.h"
@@ -67,8 +68,16 @@ static int _drawn_count = 0; // aircraft drawn in last frame, for status bar
 static char _tracked_hex[7] = {};
 
 #define CANVAS_W LCD_H_RES
-#define CANVAS_H (LCD_V_RES - 30)  // minus status bar
+#define CANVAS_H (LCD_V_RES - STATUS_BAR_HEIGHT)
 #define BG_COLOR lv_color_hex(0x0a0a1a)
+
+// Extra clearance reserved at the canvas's top edge so the outermost range
+// ring / home-marker cross don't touch the status bar directly above it --
+// without this the ring's radius is scaled to reach exactly y=0, i.e. zero
+// gap. _proj.top_margin (geo.h) shrinks the effective drawing height and
+// recenters down instead, so aircraft/rings/hit-testing (all routed through
+// to_screen()) stay consistent with each other.
+#define MAP_TOP_MARGIN 22
 
 // Per-view button/label pointers for filter buttons
 static lv_obj_t *_filter_btns[NUM_FILTERS] = {};
@@ -267,13 +276,15 @@ static void draw_range_rings(lv_layer_t *layer) {
     arc_dsc.end_angle = 360;
 
     float radius_nm = range_get_nm();
-    float scale = (float)CANVAS_H / (radius_nm * 2.0f);
+    // Same effective-height/recentered-down math as to_screen() (geo.h) --
+    // the rings have to line up with wherever aircraft actually plot.
+    float scale = (float)(CANVAS_H - _proj.top_margin) / (radius_nm * 2.0f);
 
     float ring_interval = radius_nm <= 10 ? 2.0f : (radius_nm <= 25 ? 5.0f : 10.0f);
     for (float r = ring_interval; r <= radius_nm; r += ring_interval) {
         int pixel_r = (int)(r * scale);
         arc_dsc.center.x = CANVAS_W / 2 + _proj.offset_x;
-        arc_dsc.center.y = CANVAS_H / 2 + _proj.offset_y;
+        arc_dsc.center.y = CANVAS_H / 2 + _proj.top_margin / 2 + _proj.offset_y;
         arc_dsc.radius = pixel_r;
         lv_draw_arc(layer, &arc_dsc);
     }
@@ -785,6 +796,7 @@ void map_view_init(lv_obj_t *parent, AircraftList *list) {
     _proj.radius_nm = range_get_nm();
     _proj.screen_w = CANVAS_W;
     _proj.screen_h = CANVAS_H;
+    _proj.top_margin = MAP_TOP_MARGIN;
     _proj.offset_x = 0;
     _proj.offset_y = 0;
 

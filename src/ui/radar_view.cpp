@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include "radar_view.h"
 #include "views.h"
+#include "status_bar.h"
 #include "detail_card.h"
 #include "filters.h"
 #include "../pins_config.h"
@@ -24,10 +25,15 @@ static uint32_t _last_sweep_ms = 0;
 static uint32_t _trails_cleared_at = 0;
 
 #define RADAR_W LCD_H_RES
-#define RADAR_H (LCD_V_RES - 30)
+#define RADAR_H (LCD_V_RES - STATUS_BAR_HEIGHT)
 #define RADAR_CX (RADAR_W / 2)
-#define RADAR_CY (RADAR_H / 2)
-#define RADAR_R (RADAR_H / 2 - 10)  // max radius in pixels
+// Extra clearance above the compass rose so its "N" label / outer ring
+// don't touch the status bar directly above the canvas -- without this the
+// radius is scaled to reach exactly y=0 (zero gap). Shrinks the effective
+// drawing height and recenters down instead of touching the top edge.
+#define RADAR_TOP_MARGIN 22
+#define RADAR_CY (RADAR_H / 2 + RADAR_TOP_MARGIN / 2)
+#define RADAR_R ((RADAR_H - RADAR_TOP_MARGIN) / 2 - 10)  // max radius in pixels
 
 #define SWEEP_PERIOD_MS 30000  // one full rotation = 30 seconds
 

@@ -2,7 +2,13 @@
 #include "lvgl.h"
 #include "../data/aircraft.h"
 
-// Create the status bar at the top of the screen (30px tall)
+// Single source of truth for the status bar's height -- every view that
+// needs to know where its own canvas starts (map/radar/arrivals/stats) or
+// how tall the popover overlays below it can be (location_picker) includes
+// this instead of hardcoding the number.
+#define STATUS_BAR_HEIGHT 38
+
+// Create the status bar at the top of the screen (STATUS_BAR_HEIGHT tall)
 lv_obj_t *status_bar_create(lv_obj_t *parent);
 
 // Update status bar with current data

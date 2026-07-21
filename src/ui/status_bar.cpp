@@ -14,7 +14,6 @@ static lv_obj_t *auto_label;
 
 static const char *NAV_NAMES[] = {"MAP", "RADAR", "LIST", "STATS"};
 
-#define STATUS_BAR_HEIGHT 30
 #define STATUS_BG_COLOR lv_color_hex(0x0d0d1a)
 #define STATUS_TEXT_COLOR lv_color_hex(0x888899)
 #define STATUS_ACCENT_COLOR lv_color_hex(0x00cc66)
@@ -50,7 +49,7 @@ lv_obj_t *status_bar_create(lv_obj_t *parent) {
     for (int i = 0; i < NUM_VIEWS; i++) {
         nav_btns[i] = lv_obj_create(bar);
         lv_obj_set_size(nav_btns[i], 60, 24);
-        lv_obj_set_pos(nav_btns[i], nav_x0 + i * 66, 3);
+        lv_obj_set_pos(nav_btns[i], nav_x0 + i * 66, (STATUS_BAR_HEIGHT - 24) / 2);
         lv_obj_set_style_bg_color(nav_btns[i], STATUS_BG_COLOR, 0);
         lv_obj_set_style_bg_opa(nav_btns[i], LV_OPA_COVER, 0);
         lv_obj_set_style_border_color(nav_btns[i], STATUS_TEXT_COLOR, 0);
@@ -81,7 +80,7 @@ lv_obj_t *status_bar_create(lv_obj_t *parent) {
     lv_label_set_text(auto_label, "AUTO");
     lv_obj_set_style_text_font(auto_label, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(auto_label, STATUS_ACCENT_COLOR, 0);
-    lv_obj_set_pos(auto_label, nav_x0 + nav_total_w + 8, 8);
+    lv_obj_set_pos(auto_label, nav_x0 + nav_total_w + 8, (STATUS_BAR_HEIGHT - 16) / 2);
     lv_obj_clear_flag(auto_label, LV_OBJ_FLAG_CLICKABLE);
 
     // Gear icon (right side, before update label)

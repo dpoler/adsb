@@ -5,6 +5,7 @@
 #include "stats_view.h"
 #include "stats.h"
 #include "views.h"
+#include "status_bar.h"
 #include "../pins_config.h"
 #include "../data/fetcher.h"
 #include "../data/error_log.h"
@@ -12,7 +13,7 @@
 #include "geo.h" // altitude_color()
 
 #define STATS_W LCD_H_RES
-#define STATS_H (LCD_V_RES - 30)
+#define STATS_H (LCD_V_RES - STATUS_BAR_HEIGHT)
 #define BG_COLOR lv_color_hex(0x0a0a1a)
 #define DIM_COLOR lv_color_hex(0x666688)
 #define ACCENT_COLOR lv_color_hex(0x4488ff)

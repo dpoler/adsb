@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include "arrivals_view.h"
 #include "views.h"
+#include "status_bar.h"
 #include "detail_card.h"
 #include "../pins_config.h"
 #include "geo.h"
@@ -21,7 +22,7 @@ static lv_obj_t *_filter_lbls[NUM_FILTERS] = {};
 static bool _filter_just_clicked = false; // suppress the row-tap handler right after a filter button tap
 
 #define BOARD_W LCD_H_RES
-#define BOARD_H (LCD_V_RES - 30)
+#define BOARD_H (LCD_V_RES - STATUS_BAR_HEIGHT)
 
 #define CELL_H 28
 #define ROW_H (CELL_H + 4)

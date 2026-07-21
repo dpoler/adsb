@@ -13,15 +13,20 @@ struct MapProjection {
     int screen_h;
     int offset_x;       // for panning
     int offset_y;
+    int top_margin = 0; // reserves clearance at the screen's top edge (e.g.
+                         // so range rings don't touch chrome directly above
+                         // the canvas) by shrinking the effective drawing
+                         // height and recentering down instead of scaling to
+                         // touch y=0. 0 = old behavior, edge to edge.
 
     // Convert lat/lon to screen x,y. Returns false if off-screen.
     bool to_screen(float lat, float lon, int &sx, int &sy) const {
         float dx_nm = (lon - center_lon) * 60.0f * cosf(center_lat * M_PI / 180.0f);
         float dy_nm = (lat - center_lat) * 60.0f;
 
-        float scale = (float)screen_h / (radius_nm * 2.0f);
+        float scale = (float)(screen_h - top_margin) / (radius_nm * 2.0f);
         sx = (int)(screen_w / 2 + dx_nm * scale) + offset_x;
-        sy = (int)(screen_h / 2 - dy_nm * scale) + offset_y;
+        sy = (int)(screen_h / 2 + top_margin / 2 - dy_nm * scale) + offset_y;
 
         return (sx >= -20 && sx < screen_w + 20 && sy >= -20 && sy < screen_h + 20);
     }

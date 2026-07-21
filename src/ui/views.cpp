@@ -28,7 +28,6 @@ static uint32_t _last_touch_time = 0;
 static uint32_t _last_cycle_time = 0;
 static bool _cycle_paused = false;
 
-#define STATUS_BAR_HEIGHT 30
 #define CONTENT_Y STATUS_BAR_HEIGHT
 #define CONTENT_H (LCD_V_RES - STATUS_BAR_HEIGHT)
 
