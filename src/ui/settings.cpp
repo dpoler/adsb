@@ -30,7 +30,6 @@ static lv_obj_t *_trail_len_label = nullptr;
 static lv_obj_t *_sw_cycle = nullptr;
 static lv_obj_t *_slider_cycle_int = nullptr;
 static lv_obj_t *_cycle_int_label = nullptr;
-static lv_obj_t *_sw_hide_ground = nullptr;
 
 static UserConfig _cfg;
 
@@ -139,7 +138,6 @@ static void save_and_close(lv_event_t *e) {
     _cfg.trail_max_points = lv_slider_get_value(_slider_trail_len);
     _cfg.cycle_enabled = lv_obj_has_state(_sw_cycle, LV_STATE_CHECKED);
     _cfg.cycle_interval_s = lv_slider_get_value(_slider_cycle_int);
-    _cfg.hide_ground = lv_obj_has_state(_sw_hide_ground, LV_STATE_CHECKED);
 
     storage_save_config(_cfg);
     Serial.println("Config saved to NVS");
@@ -326,9 +324,9 @@ void settings_init(lv_obj_t *parent) {
         lv_label_set_text_fmt(_cycle_int_label, "%ds", val);
     }, LV_EVENT_VALUE_CHANGED, nullptr);
 
-    // Hide ground aircraft
-    create_label(_panel, "Hide Ground AC", rx, 330);
-    _sw_hide_ground = create_switch(_panel, rx + 140, 328, _cfg.hide_ground);
+    // Hide ground aircraft -- moved to a quick-access GND button in the
+    // right-edge filter column (map/radar/arrivals), same control as this
+    // used to be, just not buried in Settings anymore.
 
     // airportdb.io token — used by the location picker's "Add airport" flow
     create_label(_panel, "Airport DB Token (airportdb.io)", rx, 364);
@@ -415,9 +413,6 @@ void settings_show() {
 
     lv_slider_set_value(_slider_cycle_int, _cfg.cycle_interval_s, LV_ANIM_OFF);
     lv_label_set_text_fmt(_cycle_int_label, "%ds", _cfg.cycle_interval_s);
-
-    if (_cfg.hide_ground) lv_obj_add_state(_sw_hide_ground, LV_STATE_CHECKED);
-    else lv_obj_clear_state(_sw_hide_ground, LV_STATE_CHECKED);
 
     lv_obj_clear_flag(_overlay, LV_OBJ_FLAG_HIDDEN);
 }

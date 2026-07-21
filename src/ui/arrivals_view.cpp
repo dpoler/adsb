@@ -17,6 +17,11 @@ static AircraftList *_list = nullptr;      // currently effective list
 static AircraftList *_home_list = nullptr; // the list passed in at init
 static lv_obj_t *_board_container = nullptr;
 static lv_obj_t *_filter_btns[NUM_FILTERS] = {};
+// GND is a quick-access toggle for g_config.hide_ground -- not part of the
+// FILT_* bitmask (unconditional exclude, not an OR/AND-able category or
+// state match), but drawn in the same button stack, state group with VERT.
+static lv_obj_t *_gnd_btn = nullptr;
+static lv_obj_t *_gnd_lbl = nullptr;
 static lv_obj_t *_filter_lbls[NUM_FILTERS] = {};
 static bool _filter_just_clicked = false; // suppress the row-tap handler right after a filter button tap
 
@@ -213,16 +218,49 @@ static void update_filter_visuals() {
     }
 }
 
+#define COLOR_GND lv_color_hex(0x9c9482) // stone-grey, echoes the "GND" swatch in the altitude legend (altitude_color(0), geo.h) rather than an arbitrary hue
+
+static void update_gnd_visual() {
+    if (!_gnd_btn) return;
+    if (g_config.hide_ground) {
+        lv_obj_set_style_bg_color(_gnd_btn, COLOR_GND, 0);
+        lv_obj_set_style_bg_opa(_gnd_btn, LV_OPA_COVER, 0);
+        lv_obj_set_style_border_color(_gnd_btn, lv_color_hex(0xffffff), 0);
+        lv_obj_set_style_border_width(_gnd_btn, 2, 0);
+        lv_obj_set_style_border_opa(_gnd_btn, LV_OPA_COVER, 0);
+        lv_obj_set_style_text_color(_gnd_lbl, lv_color_hex(0x000000), 0);
+    } else {
+        lv_obj_set_style_bg_color(_gnd_btn, lv_color_hex(0x0a0a1a), 0);
+        lv_obj_set_style_bg_opa(_gnd_btn, LV_OPA_70, 0);
+        lv_obj_set_style_border_color(_gnd_btn, COLOR_GND, 0);
+        lv_obj_set_style_border_width(_gnd_btn, 1, 0);
+        lv_obj_set_style_border_opa(_gnd_btn, LV_OPA_40, 0);
+        lv_obj_set_style_text_color(_gnd_lbl, lv_color_hex(0x666666), 0);
+    }
+}
+
+static void gnd_click_cb(lv_event_t *e) {
+    _filter_just_clicked = true;
+    g_config.hide_ground = !g_config.hide_ground;
+    storage_save_config(g_config);
+    update_gnd_visual();
+}
+
 // Update board data from aircraft list
 static void update_board(lv_timer_t *t) {
     if (views_get_active_index() != VIEW_ARRIVALS) return;
 
     // Sync filter button visuals if filter changed from another view
     static unsigned _last_synced_filter = ~0u; // impossible bitmask value, forces sync on first tick
+    static bool _last_synced_gnd = g_config.hide_ground;
     unsigned af = filter_get_active();
     if (af != _last_synced_filter) {
         _last_synced_filter = af;
         update_filter_visuals();
+    }
+    if (g_config.hide_ground != _last_synced_gnd) {
+        _last_synced_gnd = g_config.hide_ground;
+        update_gnd_visual();
     }
 
     _list = locations_active_list(_home_list);
@@ -509,7 +547,8 @@ void arrivals_view_init(lv_obj_t *parent, AircraftList *list) {
     // the space freed up by the removed ROUTE column.
     {
         int btn_w = 64, btn_h = 48, btn_gap = 10, group_gap_extra = 14;
-        int total_h = NUM_FILTERS * btn_h + (NUM_FILTERS - 1) * btn_gap + group_gap_extra;
+        // +1 slot for GND, appended after VERT in the same state group
+        int total_h = (NUM_FILTERS + 1) * btn_h + NUM_FILTERS * btn_gap + group_gap_extra;
         int btn_x = BOARD_W - btn_w - 8;
         int btn_y0 = (BOARD_H - total_h) / 2;
         for (int i = 0; i < NUM_FILTERS; i++) {
@@ -550,6 +589,24 @@ void arrivals_view_init(lv_obj_t *parent, AircraftList *list) {
             _filter_lbls[i] = lbl;
         }
         update_filter_visuals();
+
+        // GND -- quick toggle for g_config.hide_ground, same state group as
+        // VERT (see map_view.cpp's copy of this block for the full rationale)
+        int y = btn_y0 + NUM_FILTERS * (btn_h + btn_gap) + group_gap_extra;
+        _gnd_btn = lv_obj_create(parent);
+        lv_obj_set_size(_gnd_btn, btn_w, btn_h);
+        lv_obj_set_pos(_gnd_btn, btn_x, y);
+        lv_obj_set_style_radius(_gnd_btn, 6, 0);
+        lv_obj_set_style_pad_all(_gnd_btn, 0, 0);
+        lv_obj_clear_flag(_gnd_btn, LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_clear_flag(_gnd_btn, LV_OBJ_FLAG_SCROLL_CHAIN);
+        lv_obj_add_event_cb(_gnd_btn, gnd_click_cb, LV_EVENT_CLICKED, nullptr);
+
+        _gnd_lbl = lv_label_create(_gnd_btn);
+        lv_label_set_text(_gnd_lbl, "GND");
+        lv_obj_set_style_text_font(_gnd_lbl, &lv_font_montserrat_16, 0);
+        lv_obj_center(_gnd_lbl);
+        update_gnd_visual();
     }
 
     // Data update timer
