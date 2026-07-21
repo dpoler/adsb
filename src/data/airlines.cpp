@@ -2,11 +2,19 @@
 #include "http_mutex.h"
 #include <Arduino.h>
 #include <WiFi.h>
+#include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 #include <esp_heap_caps.h>
 #include <cstring>
 
 #define AIRLINES_URL "https://raw.githubusercontent.com/dpoler/AirlinesCSV/main/airlines.csv"
+
+// NetworkClientSecure's default TLS handshake timeout is 120s and is NOT
+// bounded by HTTPClient::setTimeout() -- see fetcher.cpp for the full
+// explanation. This runs once at boot, but a hung handshake here would
+// still hold http_mutex (and delay the very first ADS-B fetch) for up to
+// two minutes instead of failing promptly.
+#define TLS_HANDSHAKE_TIMEOUT_S 8
 
 static AirlineEntry _airlines[AIRLINES_MAX];
 static int _airline_count = 0;
@@ -41,8 +49,11 @@ static void parse_line(const char *line, size_t len) {
 bool airlines_load() {
     if (!http_mutex_acquire(pdMS_TO_TICKS(15000))) return false;
 
+    WiFiClientSecure client;
+    client.setInsecure(); // matches http.begin(url)'s own no-CA-cert behavior
+    client.setHandshakeTimeout(TLS_HANDSHAKE_TIMEOUT_S);
     HTTPClient http;
-    http.begin(AIRLINES_URL);
+    http.begin(client, AIRLINES_URL);
     http.setTimeout(15000);
     uint32_t t0 = millis();
     int code = http.GET();

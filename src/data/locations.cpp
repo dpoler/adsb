@@ -7,11 +7,22 @@
 #include <Arduino.h>
 #include <Preferences.h>
 #include <WiFi.h>
+#include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
 #include <esp_heap_caps.h>
 #include <cstring>
 #include <cctype>
+
+// NetworkClientSecure's default TLS handshake timeout is 120s and is NOT
+// bounded by HTTPClient::setTimeout() (that only covers the read phase after
+// a connection succeeds) -- a slow/hung handshake here would otherwise hold
+// http_mutex for up to two full minutes, starving every other network
+// consumer in the app. Must construct the WiFiClientSecure ourselves and
+// call setHandshakeTimeout() on it before HTTPClient::begin(), since the
+// single-string begin(url) overload creates its own client with the 120s
+// default baked in.
+#define TLS_HANDSHAKE_TIMEOUT_S 8
 
 // PSRAM allocator for the airportdb.io JSON response — keeps this off internal
 // DRAM, which this board (ESP32-P4 + C6 co-processor) already runs thin on.
@@ -240,8 +251,11 @@ bool locations_add_from_icao(const char *icao, char *err, size_t err_size) {
     snprintf(url, sizeof(url), "https://airportdb.io/api/v1/airport/%s?apiToken=%s",
              icao_upper, g_config.airportdb_token);
 
+    WiFiClientSecure client;
+    client.setInsecure(); // matches http.begin(url)'s own no-CA-cert behavior
+    client.setHandshakeTimeout(TLS_HANDSHAKE_TIMEOUT_S);
     HTTPClient http;
-    http.begin(url);
+    http.begin(client, url);
     http.setTimeout(10000);
     int code = http.GET();
 

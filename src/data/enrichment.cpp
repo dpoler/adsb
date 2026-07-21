@@ -1,6 +1,7 @@
 #include "enrichment.h"
 #include "http_mutex.h"
 #include <WiFi.h>
+#include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
 #include <esp_heap_caps.h>
@@ -20,6 +21,17 @@ struct EnrichPsramAlloc : ArduinoJson::Allocator {
     }
 };
 static EnrichPsramAlloc _enrich_alloc;
+
+// NetworkClientSecure's default TLS handshake timeout is 120s and is NOT
+// bounded by HTTPClient::setTimeout() (that only covers the read phase
+// after a connection succeeds) -- a slow/hung handshake to either
+// third-party host here would otherwise hold the shared http_mutex for up
+// to two full minutes, starving every other network consumer in the app
+// (the main ADS-B poll, the saved-location poll, add-airport). Must
+// construct the WiFiClientSecure ourselves and call setHandshakeTimeout()
+// on it before handing it to HTTPClient::begin(), since the single-string
+// begin(url) overload creates its own client with the 120s default baked in.
+#define TLS_HANDSHAKE_TIMEOUT_S 8
 
 #define MAX_CACHE 20
 
@@ -104,10 +116,14 @@ static void run_stage1(AircraftEnrichment *entry) {
     if (http_mutex_acquire(pdMS_TO_TICKS(8000))) {
         char url[128];
         snprintf(url, sizeof(url), "https://api.adsbdb.com/v0/aircraft/%s", _pending_icao);
+        WiFiClientSecure client;
+        client.setInsecure(); // matches http.begin(url)'s own no-CA-cert behavior
+        client.setHandshakeTimeout(TLS_HANDSHAKE_TIMEOUT_S);
         HTTPClient http;
-        http.begin(url);
+        http.begin(client, url);
         http.setTimeout(5000);
-        if (http.GET() == HTTP_CODE_OK) {
+        int code = http.GET();
+        if (code == HTTP_CODE_OK) {
             JsonDocument doc(&_enrich_alloc);
             if (fetch_and_parse(http, doc)) {
                 JsonObject ac = doc["response"]["aircraft"];
@@ -120,6 +136,7 @@ static void run_stage1(AircraftEnrichment *entry) {
                 entry->year_built = ac["year_built"] | 0;
             }
         } else {
+            Serial.printf("[Enrich] stage1 (adsbdb) HTTP error: %d\n", code);
             http.end();
         }
         http_mutex_release();
@@ -132,10 +149,14 @@ static void run_stage2(AircraftEnrichment *entry) {
         char url[128];
         snprintf(url, sizeof(url),
                  "https://api.planespotters.net/pub/photos/hex/%s", _pending_icao);
+        WiFiClientSecure client;
+        client.setInsecure(); // matches http.begin(url)'s own no-CA-cert behavior
+        client.setHandshakeTimeout(TLS_HANDSHAKE_TIMEOUT_S);
         HTTPClient http;
-        http.begin(url);
+        http.begin(client, url);
         http.setTimeout(5000);
-        if (http.GET() == HTTP_CODE_OK) {
+        int code = http.GET();
+        if (code == HTTP_CODE_OK) {
             JsonDocument doc(&_enrich_alloc);
             if (fetch_and_parse(http, doc)) {
                 JsonArray photos = doc["photos"].as<JsonArray>();
@@ -145,6 +166,7 @@ static void run_stage2(AircraftEnrichment *entry) {
                 }
             }
         } else {
+            Serial.printf("[Enrich] stage2 (planespotters) HTTP error: %d\n", code);
             http.end();
         }
         http_mutex_release();

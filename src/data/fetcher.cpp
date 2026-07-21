@@ -11,6 +11,7 @@
 #include <ETH.h>
 #endif
 #include <WiFi.h>
+#include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
 #include <esp_heap_caps.h>
@@ -102,6 +103,17 @@ static bool wifi_connect_with_timeout(uint32_t timeout_ms) {
 #define WIFI_CONNECT_TIMEOUT_MS 30000
 #define WIFI_MAX_RETRIES 3  // retries before C6 hard reset
 #define FETCH_FAIL_RESET_THRESHOLD 10  // consecutive fails before reconnect
+
+// NetworkClientSecure's default TLS handshake timeout is 120s and is NOT
+// bounded by HTTPClient::setTimeout() (that only covers the read phase after
+// a connection succeeds) -- a slow/hung handshake here would otherwise hold
+// http_mutex for up to two full minutes, starving every other network
+// consumer in the app (enrichment, the saved-location poll, add-airport).
+// Must construct the WiFiClientSecure ourselves and call
+// setHandshakeTimeout() on it before HTTPClient::begin(), since the
+// single-string begin(url) overload creates its own client with the 120s
+// default baked in.
+#define TLS_HANDSHAKE_TIMEOUT_S 8
 
 static volatile NetType _active_net = NET_NONE;
 
@@ -419,8 +431,11 @@ static void location_fetch_poll() {
         char url[128];
         snprintf(url, sizeof(url), "https://api.adsb.lol/v2/point/%.4f/%.4f/%d",
                  lat, lon, radius);
+        WiFiClientSecure client;
+        client.setInsecure(); // matches http.begin(url)'s own no-CA-cert behavior
+        client.setHandshakeTimeout(TLS_HANDSHAKE_TIMEOUT_S);
         HTTPClient http;
-        http.begin(url);
+        http.begin(client, url);
         http.setTimeout(8000);
         int httpCode = http.GET();
         if (httpCode == HTTP_CODE_OK) {
@@ -519,8 +534,11 @@ static void fetch_task(void *param) {
                 char url[128];
                 snprintf(url, sizeof(url), "https://api.adsb.lol/v2/point/%.4f/%.4f/%d",
                          g_config.home_lat, g_config.home_lon, g_config.radius_nm);
+                WiFiClientSecure client;
+                client.setInsecure(); // matches http.begin(url)'s own no-CA-cert behavior
+                client.setHandshakeTimeout(TLS_HANDSHAKE_TIMEOUT_S);
                 HTTPClient http;
-                http.begin(url);
+                http.begin(client, url);
                 http.setTimeout(10000);
                 uint32_t t0 = millis();
                 int httpCode = http.GET();
