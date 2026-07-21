@@ -31,7 +31,7 @@ static uint32_t _trails_cleared_at = 0;
 // don't touch the status bar directly above the canvas -- without this the
 // radius is scaled to reach exactly y=0 (zero gap). Shrinks the effective
 // drawing height and recenters down instead of touching the top edge.
-#define RADAR_TOP_MARGIN 22
+#define RADAR_TOP_MARGIN 34
 #define RADAR_CY (RADAR_H / 2 + RADAR_TOP_MARGIN / 2)
 #define RADAR_R ((RADAR_H - RADAR_TOP_MARGIN) / 2 - 10)  // max radius in pixels
 
@@ -248,14 +248,17 @@ static void draw_blips(lv_layer_t *layer) {
                           (lv_coord_t)(sx + 4), (lv_coord_t)(sy + 4)};
         lv_draw_rect(layer, &dot, &area);
 
-        // Labels — two zones: paint detail (0-45deg) and condensed (45-240deg)
-        if (behind < LABEL_VISIBLE_DEG) {
+        // Labels — two zones: paint detail (0-45deg) and condensed (45-240deg).
+        // The whole block is toggled off by the status bar's TAG chip -- not
+        // just the callsign line, since the label as a whole is the
+        // "callsign/altitude readout" (ATC data tag) it's named after.
+        if (behind < LABEL_VISIBLE_DEG && !callsigns_hidden()) {
             uint8_t lbl_opa = opa > LV_OPA_50 ? LV_OPA_80 : opa;
 
             if (behind < PAINT_DETAIL_DEG) {
                 // === PAINT ZONE: expanded detail ===
-                // Line 1: Callsign -- toggled off by the status bar's TAG chip
-                if (!callsigns_hidden()) {
+                // Line 1: Callsign
+                {
                     const char *cs = ac.callsign[0] ? ac.callsign : ac.icao_hex;
                     char line1[48];
                     strlcpy(line1, cs, sizeof(line1));
@@ -327,8 +330,8 @@ static void draw_blips(lv_layer_t *layer) {
                 else if (ac.altitude >= 18000) snprintf(alt_str, sizeof(alt_str), "FL%d", ac.altitude / 100);
                 else snprintf(alt_str, sizeof(alt_str), "%d'", ac.altitude / 100 * 100);
 
-                // Line 1: callsign -- toggled off by the status bar's TAG chip
-                if (!callsigns_hidden()) {
+                // Line 1: callsign
+                {
                     char top[36];
                     strlcpy(top, cs, sizeof(top));
                     lv_draw_label_dsc_t lbl;

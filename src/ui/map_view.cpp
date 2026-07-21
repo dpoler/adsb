@@ -77,7 +77,7 @@ static char _tracked_hex[7] = {};
 // gap. _proj.top_margin (geo.h) shrinks the effective drawing height and
 // recenters down instead, so aircraft/rings/hit-testing (all routed through
 // to_screen()) stay consistent with each other.
-#define MAP_TOP_MARGIN 22
+#define MAP_TOP_MARGIN 50
 
 // Per-view button/label pointers for filter buttons
 static lv_obj_t *_filter_btns[NUM_FILTERS] = {};
