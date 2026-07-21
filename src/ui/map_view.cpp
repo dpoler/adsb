@@ -356,7 +356,10 @@ static void draw_home_marker(lv_layer_t *layer) {
     lv_draw_line(layer, &line_dsc);
 }
 
-#define COLOR_HOME_REF lv_color_hex(0x00cc66) // matches the location picker's own "HOME" accent color
+// Shared with draw_airport_glyph() further down -- Home's marker uses the
+// same color as every other airport reference point now (dot shape is
+// the only thing distinguishing it, not a separate hue).
+#define COLOR_AIRPORT_GLYPH lv_color_hex(0x557799)
 
 // Marks where Home actually is when it's NOT the active location -- e.g.
 // looking at a saved airport close enough that Home would otherwise be
@@ -377,7 +380,7 @@ static void draw_home_reference_elsewhere(lv_layer_t *layer) {
     // alongside, just read distinctly from them (dot vs. their "+").
     lv_draw_rect_dsc_t dot;
     lv_draw_rect_dsc_init(&dot);
-    dot.bg_color = COLOR_HOME_REF;
+    dot.bg_color = COLOR_AIRPORT_GLYPH;
     dot.bg_opa = LV_OPA_70;
     dot.radius = LV_RADIUS_CIRCLE;
     lv_area_t area = {(lv_coord_t)(hx - 3), (lv_coord_t)(hy - 3),
@@ -386,7 +389,7 @@ static void draw_home_reference_elsewhere(lv_layer_t *layer) {
 
     lv_draw_label_dsc_t lbl;
     lv_draw_label_dsc_init(&lbl);
-    lbl.color = COLOR_HOME_REF;
+    lbl.color = COLOR_AIRPORT_GLYPH;
     lbl.font = &lv_font_montserrat_14;
     lbl.opa = LV_OPA_80;
     lbl.text = "HOME";
@@ -512,7 +515,6 @@ static void draw_runways_for(lv_layer_t *layer, const Location *loc, LabelRectSe
     }
 }
 
-#define COLOR_AIRPORT_GLYPH lv_color_hex(0x557799)
 #define GLYPH_R 5
 
 // Small "+ ICAO" marker for an airport we don't have runway geometry for —
