@@ -633,7 +633,21 @@ static void draw_aircraft(lv_layer_t *layer) {
 
         // Draw trail (if enabled in settings) — altitude-colored
         if (ac.trail_count > 1 && g_config.trails_enabled) {
-            int max_pts = g_config.trail_max_points;
+            // Trail points accumulate one per ~20s fetch cycle regardless of
+            // zoom, so a fixed point-count cap covers wildly different
+            // physical distances depending on aircraft speed and has no
+            // relation to the current view radius -- e.g. reducing the cap
+            // at a small radius often looked like it did nothing, since
+            // most aircraft hadn't recorded more points than the new cap
+            // anyway. Scale the effective cap by how zoomed in the current
+            // view is (relative to the widest configured radius preset) so
+            // "Trail Amount" reads as roughly the same fraction of the
+            // visible screen at any zoom instead of an arbitrary absolute
+            // count. Same formula in radar_view.cpp.
+            float radius_ratio = range_get_nm() / (float)g_config.radius_presets[3];
+            if (radius_ratio > 1.0f) radius_ratio = 1.0f;
+            int max_pts = (int)(g_config.trail_max_points * radius_ratio);
+            if (max_pts < 3) max_pts = 3; // always show some trail, never fully vanish
             int start = (ac.trail_count > max_pts) ? ac.trail_count - max_pts : 0;
             if (start < 1) start = 1;
             lv_draw_line_dsc_t trail_dsc;

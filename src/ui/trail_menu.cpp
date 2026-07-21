@@ -96,15 +96,20 @@ static void open_overlay() {
         storage_save_config(g_config);
     }, LV_EVENT_VALUE_CHANGED, nullptr);
 
-    // Length
+    // Trail Amount -- not "Length" or a "pts" count anymore, since the
+    // effective on-screen trail is now scaled by the current view radius
+    // (see map_view.cpp/radar_view.cpp) rather than a literal absolute
+    // point count. "N/60" reads as a relative amount (out of the max
+    // representable) instead of asserting a unit that isn't really true at
+    // any zoom other than the widest radius preset.
     lv_obj_t *len_lbl = lv_label_create(_panel);
-    lv_label_set_text(len_lbl, "Length");
+    lv_label_set_text(len_lbl, "Trail Amount");
     lv_obj_set_style_text_font(len_lbl, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(len_lbl, COLOR_DIM, 0);
     lv_obj_set_pos(len_lbl, 0, 66);
 
     _len_label = lv_label_create(_panel);
-    lv_label_set_text_fmt(_len_label, "%d pts", g_config.trail_max_points);
+    lv_label_set_text_fmt(_len_label, "%d/60", g_config.trail_max_points);
     lv_obj_set_style_text_color(_len_label, lv_color_white(), 0);
     lv_obj_set_style_text_font(_len_label, &lv_font_montserrat_14, 0);
     lv_obj_set_pos(_len_label, PANEL_W - 20 - 50, 66);
@@ -126,7 +131,7 @@ static void open_overlay() {
     lv_obj_add_event_cb(slider, [](lv_event_t *e) {
         int val = lv_slider_get_value(lv_event_get_target_obj(e));
         g_config.trail_max_points = val;
-        lv_label_set_text_fmt(_len_label, "%d pts", val);
+        lv_label_set_text_fmt(_len_label, "%d/60", val);
     }, LV_EVENT_VALUE_CHANGED, nullptr);
     lv_obj_add_event_cb(slider, [](lv_event_t *e) {
         storage_save_config(g_config);

@@ -219,7 +219,12 @@ static void draw_blips(lv_layer_t *layer) {
 
         // Draw trail segments (if enabled) — altitude-colored
         if (ac.trail_count > 1 && g_config.trails_enabled) {
-            int max_pts = g_config.trail_max_points;
+            // Scale the effective cap by current zoom -- see the matching
+            // comment in map_view.cpp for the full rationale.
+            float radius_ratio = range_get_nm() / (float)g_config.radius_presets[3];
+            if (radius_ratio > 1.0f) radius_ratio = 1.0f;
+            int max_pts = (int)(g_config.trail_max_points * radius_ratio);
+            if (max_pts < 3) max_pts = 3; // always show some trail, never fully vanish
             int start = (ac.trail_count > max_pts) ? ac.trail_count - max_pts : 0;
             lv_draw_rect_dsc_t tdot;
             lv_draw_rect_dsc_init(&tdot);
