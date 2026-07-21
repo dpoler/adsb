@@ -2,9 +2,8 @@
 #include "status_bar.h"
 #include "views.h"
 #include "range.h"
-#include "map_view.h"
-#include "radar_view.h"
 #include "display_prefs.h"
+#include "trail_menu.h"
 #include "../pins_config.h"
 #include "../data/fetcher.h"
 
@@ -128,10 +127,12 @@ lv_obj_t *status_bar_create(lv_obj_t *parent) {
     lv_obj_set_pos(auto_label, nav_x0 + nav_total_w + 8, (STATUS_BAR_HEIGHT - 16) / 2);
     lv_obj_clear_flag(auto_label, LV_OBJ_FLAG_CLICKABLE);
 
-    // Clear-trails chip -- Map/Radar only (Arrivals/Stats have no trails to
-    // clear). Dispatches to whichever of those two is currently active;
-    // status_bar_set_active_dot() shows/hides it per view. Starts one
-    // CHIP_W past the nav group as a buffer clearing the AUTO indicator.
+    // Trails quick-settings chip -- Map/Radar only (Arrivals/Stats have no
+    // trails). Opens the trail_menu.cpp popover (on/off, length, clear-now
+    // together) instead of directly clearing -- see the "consolidate trail
+    // controls" backlog note. status_bar_set_active_dot() shows/hides this
+    // chip per view. Starts one CHIP_W past the nav group as a buffer
+    // clearing the AUTO indicator.
     trails_chip = lv_obj_create(bar);
     lv_obj_set_size(trails_chip, CHIP_W, CHIP_H);
     lv_obj_set_pos(trails_chip, nav_x0 + nav_total_w + CHIP_W, (STATUS_BAR_HEIGHT - CHIP_H) / 2);
@@ -144,9 +145,7 @@ lv_obj_t *status_bar_create(lv_obj_t *parent) {
     lv_obj_set_style_pad_all(trails_chip, 0, 0);
     lv_obj_clear_flag(trails_chip, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_add_event_cb(trails_chip, [](lv_event_t *e) {
-        int v = views_get_active_index();
-        if (v == VIEW_MAP) map_view_clear_trails();
-        else if (v == VIEW_RADAR) radar_view_clear_trails();
+        trail_menu_toggle();
     }, LV_EVENT_CLICKED, nullptr);
 
     lv_obj_t *trails_lbl = lv_label_create(trails_chip);

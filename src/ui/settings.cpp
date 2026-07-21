@@ -24,9 +24,6 @@ static lv_obj_t *_sw_ethernet = nullptr;
 static lv_obj_t *_btn_show_pass = nullptr;
 static lv_obj_t *_sw_alert_mil = nullptr;
 static lv_obj_t *_sw_alert_emg = nullptr;
-static lv_obj_t *_sw_trails = nullptr;
-static lv_obj_t *_slider_trail_len = nullptr;
-static lv_obj_t *_trail_len_label = nullptr;
 static lv_obj_t *_sw_cycle = nullptr;
 static lv_obj_t *_slider_cycle_int = nullptr;
 static lv_obj_t *_cycle_int_label = nullptr;
@@ -134,8 +131,6 @@ static void save_and_close(lv_event_t *e) {
     _cfg.use_ethernet = lv_obj_has_state(_sw_ethernet, LV_STATE_CHECKED);
     _cfg.alert_military = lv_obj_has_state(_sw_alert_mil, LV_STATE_CHECKED);
     _cfg.alert_emergency = lv_obj_has_state(_sw_alert_emg, LV_STATE_CHECKED);
-    _cfg.trails_enabled = lv_obj_has_state(_sw_trails, LV_STATE_CHECKED);
-    _cfg.trail_max_points = lv_slider_get_value(_slider_trail_len);
     _cfg.cycle_enabled = lv_obj_has_state(_sw_cycle, LV_STATE_CHECKED);
     _cfg.cycle_interval_s = lv_slider_get_value(_slider_cycle_int);
 
@@ -274,39 +269,19 @@ void settings_init(lv_obj_t *parent) {
     create_label(_panel, "Home Longitude", rx, 96);
     _ta_lon = create_textarea(_panel, "-74.0060", lon_str, rx, 114);
 
-    // Trails
-    create_label(_panel, "Aircraft Trails", rx, 158);
-    _sw_trails = create_switch(_panel, rx + 120, 156, _cfg.trails_enabled);
+    // Aircraft Trails on/off, length, and clear are now consolidated in the
+    // TRAIL chip's own popover (status_bar.cpp -> trail_menu.cpp) instead of
+    // living here -- see the "consolidate trail controls" backlog note.
 
-    create_label(_panel, "Trail Length", rx, 190);
-    _slider_trail_len = lv_slider_create(_panel);
-    lv_obj_set_size(_slider_trail_len, 180, 10);
-    lv_obj_set_pos(_slider_trail_len, rx, 210);
-    lv_slider_set_range(_slider_trail_len, 10, 60);
-    lv_slider_set_value(_slider_trail_len, _cfg.trail_max_points, LV_ANIM_OFF);
-    lv_obj_set_style_bg_color(_slider_trail_len, lv_color_hex(0x333366), 0);
-    lv_obj_set_style_bg_color(_slider_trail_len, ACCENT_COLOR, LV_PART_INDICATOR);
-    lv_obj_set_style_bg_color(_slider_trail_len, ACCENT_COLOR, LV_PART_KNOB);
+    // Auto-cycle -- shifted up into the space the Trails controls used to
+    // occupy above.
+    create_label(_panel, "Auto-Cycle Views", rx, 158);
+    _sw_cycle = create_switch(_panel, rx + 140, 156, _cfg.cycle_enabled);
 
-    _trail_len_label = lv_label_create(_panel);
-    lv_label_set_text_fmt(_trail_len_label, "%d pts", _cfg.trail_max_points);
-    lv_obj_set_style_text_color(_trail_len_label, lv_color_white(), 0);
-    lv_obj_set_style_text_font(_trail_len_label, &lv_font_montserrat_14, 0);
-    lv_obj_set_pos(_trail_len_label, rx + 190, 206);
-
-    lv_obj_add_event_cb(_slider_trail_len, [](lv_event_t *e) {
-        int val = lv_slider_get_value(lv_event_get_target_obj(e));
-        lv_label_set_text_fmt(_trail_len_label, "%d pts", val);
-    }, LV_EVENT_VALUE_CHANGED, nullptr);
-
-    // Auto-cycle
-    create_label(_panel, "Auto-Cycle Views", rx, 240);
-    _sw_cycle = create_switch(_panel, rx + 140, 238, _cfg.cycle_enabled);
-
-    create_label(_panel, "Cycle Interval", rx, 270);
+    create_label(_panel, "Cycle Interval", rx, 188);
     _slider_cycle_int = lv_slider_create(_panel);
     lv_obj_set_size(_slider_cycle_int, 180, 10);
-    lv_obj_set_pos(_slider_cycle_int, rx, 290);
+    lv_obj_set_pos(_slider_cycle_int, rx, 208);
     lv_slider_set_range(_slider_cycle_int, 15, 120);
     lv_slider_set_value(_slider_cycle_int, _cfg.cycle_interval_s, LV_ANIM_OFF);
     lv_obj_set_style_bg_color(_slider_cycle_int, lv_color_hex(0x333366), 0);
@@ -317,7 +292,7 @@ void settings_init(lv_obj_t *parent) {
     lv_label_set_text_fmt(_cycle_int_label, "%ds", _cfg.cycle_interval_s);
     lv_obj_set_style_text_color(_cycle_int_label, lv_color_white(), 0);
     lv_obj_set_style_text_font(_cycle_int_label, &lv_font_montserrat_14, 0);
-    lv_obj_set_pos(_cycle_int_label, rx + 190, 286);
+    lv_obj_set_pos(_cycle_int_label, rx + 190, 204);
 
     lv_obj_add_event_cb(_slider_cycle_int, [](lv_event_t *e) {
         int val = lv_slider_get_value(lv_event_get_target_obj(e));
@@ -401,12 +376,6 @@ void settings_show() {
 
     if (_cfg.use_ethernet) lv_obj_add_state(_sw_ethernet, LV_STATE_CHECKED);
     else lv_obj_clear_state(_sw_ethernet, LV_STATE_CHECKED);
-
-    if (_cfg.trails_enabled) lv_obj_add_state(_sw_trails, LV_STATE_CHECKED);
-    else lv_obj_clear_state(_sw_trails, LV_STATE_CHECKED);
-
-    lv_slider_set_value(_slider_trail_len, _cfg.trail_max_points, LV_ANIM_OFF);
-    lv_label_set_text_fmt(_trail_len_label, "%d pts", _cfg.trail_max_points);
 
     if (_cfg.cycle_enabled) lv_obj_add_state(_sw_cycle, LV_STATE_CHECKED);
     else lv_obj_clear_state(_sw_cycle, LV_STATE_CHECKED);
