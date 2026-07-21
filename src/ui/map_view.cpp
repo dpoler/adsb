@@ -356,6 +356,42 @@ static void draw_home_marker(lv_layer_t *layer) {
     lv_draw_line(layer, &line_dsc);
 }
 
+#define COLOR_HOME_REF lv_color_hex(0x00cc66) // matches the location picker's own "HOME" accent color
+
+// Marks where Home actually is when it's NOT the active location -- e.g.
+// looking at a saved airport close enough that Home would otherwise be
+// on-screen with nothing to show for it. draw_home_marker() above only
+// marks whichever location is active (Home or the selected airport), so
+// this is a second, independent marker specifically for Home's own
+// coordinates. Filled circle rather than a "+" cross (already used by both
+// draw_home_marker() and draw_airport_glyph()) so it doesn't read as just
+// another one of those.
+static void draw_home_reference_elsewhere(lv_layer_t *layer) {
+    if (locations_active_index() == -1) return; // already home -- draw_home_marker() covers it
+
+    int hx, hy;
+    if (!_proj.to_screen(g_config.home_lat, g_config.home_lon, hx, hy)) return;
+
+    lv_draw_rect_dsc_t dot;
+    lv_draw_rect_dsc_init(&dot);
+    dot.bg_color = COLOR_HOME_REF;
+    dot.bg_opa = LV_OPA_COVER;
+    dot.radius = LV_RADIUS_CIRCLE;
+    lv_area_t area = {(lv_coord_t)(hx - 4), (lv_coord_t)(hy - 4),
+                       (lv_coord_t)(hx + 4), (lv_coord_t)(hy + 4)};
+    lv_draw_rect(layer, &dot, &area);
+
+    lv_draw_label_dsc_t lbl;
+    lv_draw_label_dsc_init(&lbl);
+    lbl.color = COLOR_HOME_REF;
+    lbl.font = &lv_font_montserrat_14;
+    lbl.opa = LV_OPA_90;
+    lbl.text = "HOME";
+    lv_area_t larea = {(lv_coord_t)(hx + 7), (lv_coord_t)(hy - 8),
+                        (lv_coord_t)(hx + 60), (lv_coord_t)(hy + 8)};
+    lv_draw_label(layer, &lbl, &larea);
+}
+
 // Tracks label bounding boxes already drawn this frame (across every saved
 // airport being drawn), so a new label can check whether its default spot
 // is already busy and try nudging further out instead. Labels always draw —
@@ -817,6 +853,7 @@ static void canvas_draw_cb(lv_event_t *e) {
 #endif
     draw_range_rings(layer);
     draw_home_marker(layer);
+    draw_home_reference_elsewhere(layer);
 #if HAS_AIRPORTS_DB
     draw_static_airport_glyphs(layer);
 #endif
