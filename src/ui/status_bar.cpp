@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include "status_bar.h"
 #include "views.h"
+#include "range.h"
 #include "../pins_config.h"
 #include "../data/fetcher.h"
 
@@ -11,6 +12,8 @@ static lv_obj_t *nav_btns[NUM_VIEWS];
 static lv_obj_t *nav_labels[NUM_VIEWS];
 static lv_obj_t *gear_icon;
 static lv_obj_t *auto_label;
+static lv_obj_t *range_chip;
+static lv_obj_t *range_lbl;
 
 static const char *NAV_NAMES[] = {"MAP", "RADAR", "LIST", "STATS"};
 
@@ -42,6 +45,34 @@ lv_obj_t *status_bar_create(lv_obj_t *parent) {
     lv_obj_set_style_text_color(ac_count_label, STATUS_TEXT_COLOR, 0);
     lv_obj_set_style_text_font(ac_count_label, &lv_font_montserrat_14, 0);
     lv_obj_align(ac_count_label, LV_ALIGN_LEFT_MID, 42, 0);
+
+    // Range chip -- shared by Map/Radar/Arrivals (all three read the same
+    // range_get_nm()/range_cycle() global); Stats has no radius concept, so
+    // this is hidden there via status_bar_set_active_dot(). Each view already
+    // polls range_get_nm() on its own periodic redraw timer to notice a
+    // change and re-render, so this chip only has to cycle the shared value
+    // and update its own label -- no per-view signaling needed.
+    range_chip = lv_obj_create(bar);
+    lv_obj_set_size(range_chip, 46, 22);
+    lv_obj_set_pos(range_chip, 206, (STATUS_BAR_HEIGHT - 22) / 2);
+    lv_obj_set_style_bg_color(range_chip, lv_color_hex(0x14142a), 0);
+    lv_obj_set_style_bg_opa(range_chip, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_color(range_chip, STATUS_TEXT_COLOR, 0);
+    lv_obj_set_style_border_width(range_chip, 1, 0);
+    lv_obj_set_style_border_opa(range_chip, LV_OPA_40, 0);
+    lv_obj_set_style_radius(range_chip, 4, 0);
+    lv_obj_set_style_pad_all(range_chip, 0, 0);
+    lv_obj_clear_flag(range_chip, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_event_cb(range_chip, [](lv_event_t *e) {
+        range_cycle();
+        lv_label_set_text(range_lbl, range_label());
+    }, LV_EVENT_CLICKED, nullptr);
+
+    range_lbl = lv_label_create(range_chip);
+    lv_label_set_text(range_lbl, range_label());
+    lv_obj_set_style_text_font(range_lbl, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_color(range_lbl, lv_color_hex(0x4488ff), 0);
+    lv_obj_center(range_lbl);
 
     // Nav buttons (center)
     int nav_total_w = NUM_VIEWS * 60 + (NUM_VIEWS - 1) * 6;
@@ -144,6 +175,10 @@ void status_bar_set_active_dot(int view_index) {
         lv_obj_set_style_border_opa(nav_btns[i],
             active ? LV_OPA_COVER : LV_OPA_40, 0);
     }
+
+    // Range doesn't apply to Stats
+    if (view_index == VIEW_STATS) lv_obj_add_flag(range_chip, LV_OBJ_FLAG_HIDDEN);
+    else lv_obj_clear_flag(range_chip, LV_OBJ_FLAG_HIDDEN);
 }
 
 void status_bar_set_auto_indicator(bool visible) {

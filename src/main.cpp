@@ -143,13 +143,16 @@ void setup() {
     lv_obj_set_style_bg_opa(screen, LV_OPA_COVER, 0);
     lv_obj_clear_flag(screen, LV_OBJ_FLAG_SCROLLABLE);
 
+    // Range must be set up before the status bar -- it now owns the shared
+    // range chip and reads range_label() once at creation time.
+    range_set_levels(g_config.radius_presets, 4);
+    range_set_default(g_config.radius_nm);
+
     Serial.println("Creating status bar...");
     status_bar_create(screen);
     Serial.println("Status bar OK");
 
     Serial.println("views_init...");
-    range_set_levels(g_config.radius_presets, 4);
-    range_set_default(g_config.radius_nm);
     views_init(screen, &aircraft_list);
     Serial.println("views OK");
 

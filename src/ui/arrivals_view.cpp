@@ -16,7 +16,6 @@
 static AircraftList *_list = nullptr;      // currently effective list
 static AircraftList *_home_list = nullptr; // the list passed in at init
 static lv_obj_t *_board_container = nullptr;
-static lv_obj_t *_range_label = nullptr;
 static lv_obj_t *_filter_btns[NUM_FILTERS] = {};
 static lv_obj_t *_filter_lbls[NUM_FILTERS] = {};
 static bool _filter_just_clicked = false; // suppress the row-tap handler right after a filter button tap
@@ -334,7 +333,6 @@ static void update_board(lv_timer_t *t) {
     } else {
         lv_label_set_text_fmt(_title_label, "%s TRAFFIC  <%s    %d", loc_label, range_label(), displayed_count);
     }
-    lv_label_set_text(_range_label, range_label());
 
     _list->unlock();
 }
@@ -501,18 +499,10 @@ void arrivals_view_init(lv_obj_t *parent, AircraftList *list) {
 
     init_rows(_board_container);
 
-    // Range label — bottom-right, tappable
-    _range_label = lv_label_create(parent);
-    lv_label_set_text(_range_label, range_label());
-    lv_obj_set_style_text_font(_range_label, &lv_font_montserrat_20, 0);
-    lv_obj_set_style_text_color(_range_label, lv_color_hex(0xffdd00), 0);
-    lv_obj_set_pos(_range_label, BOARD_W - 80, BOARD_H - 28);
-    lv_obj_add_flag(_range_label, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_clear_flag(_range_label, LV_OBJ_FLAG_SCROLL_CHAIN);
-    lv_obj_add_event_cb(_range_label, [](lv_event_t *e) {
-        range_cycle();
-        lv_label_set_text(_range_label, range_label());
-    }, LV_EVENT_CLICKED, nullptr);
+    // Range is now a shared chip in the status bar (status_bar.cpp) -- this
+    // board still shows the current range inline in the title text above
+    // (update_board()) and re-reads range_get_nm() fresh every 2s tick, so
+    // no local tracking needed here.
 
     // Filter toggle buttons — vertical stack on right edge, same layout as
     // map_view.cpp/radar_view.cpp (including the FILT_VERT divider). Fits in

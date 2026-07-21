@@ -33,7 +33,6 @@ static AircraftList *_list = nullptr;      // currently effective list (home or 
 static AircraftList *_home_list = nullptr; // the list passed in at init — always the home feed
 static int _last_active_loc = -2;          // sentinel so the first tick always syncs (-1 is a valid "Home")
 static lv_obj_t *_canvas = nullptr;
-static lv_obj_t *_range_label = nullptr;
 static MapProjection _proj;
 // Per-view "clear trails" cutoff -- Map and Radar share the same underlying
 // Aircraft/TrailPoint data, so clearing trails must not mutate that shared
@@ -912,23 +911,10 @@ void map_view_init(lv_obj_t *parent, AircraftList *list) {
         _filter_lbls[i] = lbl;
     }
 
-    // Range label — bottom-right, tappable
-    _range_label = lv_label_create(parent);
-    lv_label_set_text(_range_label, range_label());
-    lv_obj_set_style_text_font(_range_label, &lv_font_montserrat_20, 0);
-    lv_obj_set_style_text_color(_range_label, lv_color_hex(0x4488ff), 0);
-    lv_obj_set_pos(_range_label, CANVAS_W - 80, CANVAS_H - 28);
-    lv_obj_add_flag(_range_label, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_clear_flag(_range_label, LV_OBJ_FLAG_SCROLL_CHAIN);
-    lv_obj_add_event_cb(_range_label, [](lv_event_t *e) {
-        range_cycle();
-        lv_label_set_text(_range_label, range_label());
-        _proj.radius_nm = range_get_nm();
-        lv_obj_invalidate(_canvas);
-    }, LV_EVENT_CLICKED, nullptr);
-
     // Clear trails — one-tap, right edge, in the gap between the filter
-    // button stack and the range label.
+    // button stack and the bottom of the canvas. Range is now a shared chip
+    // in the status bar (status_bar.cpp) -- this view still tracks
+    // range_get_nm() itself below to keep _proj.radius_nm in sync.
     {
         lv_obj_t *clr_btn = lv_obj_create(parent);
         lv_obj_set_size(clr_btn, 64, 40);
@@ -979,7 +965,6 @@ void map_view_init(lv_obj_t *parent, AircraftList *list) {
             if (r != _last_range) {
                 _last_range = r;
                 _proj.radius_nm = r;
-                lv_label_set_text(_range_label, range_label());
             }
             sync_active_location();
             lv_obj_invalidate(_canvas);
@@ -995,7 +980,6 @@ void map_view_on_show() {
     float r = range_get_nm();
     if (r != _proj.radius_nm) {
         _proj.radius_nm = r;
-        if (_range_label) lv_label_set_text(_range_label, range_label());
     }
     sync_active_location();
     if (_canvas) lv_obj_invalidate(_canvas);
