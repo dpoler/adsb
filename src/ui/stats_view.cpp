@@ -529,8 +529,10 @@ void stats_view_init(lv_obj_t *parent, AircraftList *list) {
     // ============================================================
     int cx = 340;
 
-    // Altitude distribution
-    int alt_y = 8;
+    // Altitude distribution -- header aligned with TRACKING (left column),
+    // not the top of the container, so all three columns' first header
+    // lines sit on the same row.
+    int alt_y = 40;
     create_section_header(_container, "ALTITUDE", cx, alt_y);
     for (int i = 0; i < 5; i++) {
         create_bar_row(_container, &_alt_rows[i], ALT_NAMES[i],
@@ -556,7 +558,8 @@ void stats_view_init(lv_obj_t *parent, AircraftList *list) {
 
     // Plenty of width in this column for "HEADER  value" on one line --
     // no need to stack the value under the header like SYSTEM below does.
-    int net_y = 8;
+    // Aligned with TRACKING/ALTITUDE (see alt_y above), not the container top.
+    int net_y = 40;
     create_section_header(_container, "NETWORK", rx, net_y);
     _ip_val = create_inline_row(_container, "IP", rx, net_y + ROW_H, SYS_COLOR, 90);
     _rssi_val = create_inline_row(_container, "LINK", rx, net_y + ROW_H * 2, SYS_COLOR, 90);

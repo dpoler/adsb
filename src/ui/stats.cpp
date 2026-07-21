@@ -223,15 +223,19 @@ void stats_update(AircraftList *list) {
         else if (ac.speed < 500) _stats.spd_very_fast++;
         else _stats.spd_extreme++;
 
-        if (ac.is_military) _stats.military++;
-        if (ac.is_emergency) _stats.emergency++;
-
+        // Mutually exclusive -- these 5 buckets are drawn as a bar chart
+        // sized against current_count, so every aircraft must land in
+        // exactly one of them. EMERGENCY/MILITARY used to be checked
+        // independently of JET/GA/HELI, so e.g. a military jet counted in
+        // both MIL and JET, making the bars sum to more than the total.
         bool is_h = (ac.category[0] == 'A' && ac.category[1] == '7') ||
                     (ac.type_code[0] && is_heli_type(ac.type_code));
         bool is_j = !is_h && (is_airline_callsign(ac.callsign) ||
                    (ac.category[0] == 'A' && ac.category[1] >= '3'));
 
-        if (is_h) _stats.heli++;
+        if (ac.is_emergency) _stats.emergency++;
+        else if (ac.is_military) _stats.military++;
+        else if (is_h) _stats.heli++;
         else if (is_j) _stats.jets++;
         else _stats.ga++;
 
