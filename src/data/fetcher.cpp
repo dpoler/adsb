@@ -115,6 +115,12 @@ static bool wifi_connect_with_timeout(uint32_t timeout_ms) {
 // default baked in.
 #define TLS_HANDSHAKE_TIMEOUT_S 8
 
+// HTTPClient only exposes headers explicitly registered via collectHeaders()
+// before GET() -- without this, http.header("Retry-After") always returns
+// empty even if adsb.lol sends one, silently skipping straight to the
+// exponential-backoff fallback on a 429. Shared by both adsb.lol pollers.
+static const char *kAdsbLolHeaders[] = {"Retry-After"};
+
 static volatile NetType _active_net = NET_NONE;
 
 static AircraftList *_aircraft_list = nullptr;
@@ -398,6 +404,7 @@ static void update_ip_addr() {
 // active, and fetches immediately whenever the target changes.
 static uint32_t _loc_last_gen = 0;
 static uint32_t _loc_next_fetch = 0;
+static int _loc_consecutive_429s = 0; // adsb.lol rate-limiting this poller specifically
 
 static void location_fetch_poll() {
     float lat, lon;
@@ -436,6 +443,7 @@ static void location_fetch_poll() {
         client.setHandshakeTimeout(TLS_HANDSHAKE_TIMEOUT_S);
         HTTPClient http;
         http.begin(client, url);
+        http.collectHeaders(kAdsbLolHeaders, 1);
         http.setTimeout(8000);
         int httpCode = http.GET();
         if (httpCode == HTTP_CODE_OK) {
@@ -467,6 +475,27 @@ static void location_fetch_poll() {
                 }
                 heap_caps_free(buf);
             }
+            _loc_consecutive_429s = 0;
+        } else if (httpCode == 429) {
+            // Same adsb.lol rate-limit backoff as the main fetch_task's poll
+            // (see there for why) -- push this poller's own next-attempt
+            // time further out instead of retrying in the usual 15s.
+            _loc_consecutive_429s++;
+            String retry_after = http.header("Retry-After");
+            int retry_secs = retry_after.length() ? retry_after.toInt() : 0;
+            uint32_t backoff_ms;
+            if (retry_secs > 0) {
+                backoff_ms = (uint32_t)retry_secs * 1000;
+            } else {
+                uint32_t mult = 1UL << (_loc_consecutive_429s > 4 ? 4 : _loc_consecutive_429s);
+                backoff_ms = 15000UL * mult;
+                if (backoff_ms > 300000UL) backoff_ms = 300000UL;
+            }
+            _loc_next_fetch = millis() + backoff_ms;
+            Serial.printf("[LocPoll] HTTP 429 (rate limited) -- backing off %lus\n",
+                (unsigned long)(backoff_ms / 1000));
+        } else {
+            _loc_consecutive_429s = 0;
         }
         http.end();
         http_mutex_release();
@@ -517,7 +546,9 @@ static void fetch_task(void *param) {
 
     // Main fetch loop
     int consecutive_fails = 0;
+    int consecutive_429s = 0; // adsb.lol rate-limiting us -- see backoff below
     while (true) {
+        uint32_t extra_delay_ms = 0;
         if (network_connected()) {
             // Refresh every tick, not just once at boot -- otherwise a
             // transient disconnect (which sets ip_addr to "N/A" below) never
@@ -539,6 +570,7 @@ static void fetch_task(void *param) {
                 client.setHandshakeTimeout(TLS_HANDSHAKE_TIMEOUT_S);
                 HTTPClient http;
                 http.begin(client, url);
+                http.collectHeaders(kAdsbLolHeaders, 1);
                 http.setTimeout(10000);
                 uint32_t t0 = millis();
                 int httpCode = http.GET();
@@ -578,6 +610,7 @@ static void fetch_task(void *param) {
                             parse_aircraft_json(doc, _aircraft_list, true);
                             _fstats.fetch_ok++;
                             consecutive_fails = 0;
+                            consecutive_429s = 0;
                             Serial.printf("Fetched %d ac, heap=%lu\n",
                                 _aircraft_list->count,
                                 (unsigned long)heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
@@ -597,11 +630,34 @@ static void fetch_task(void *param) {
                 } else {
                     _fstats.fetch_fail++;
                     consecutive_fails++;
-                    // Don't log routine connection failures (-1) — transient SSL/network
-                    if (httpCode != -1) {
-                        error_log_add("HTTP %d", httpCode);
+                    if (httpCode == 429) {
+                        // adsb.lol rate-limits dynamically based on their own
+                        // server load (no fixed published quota) -- back off
+                        // instead of hammering it again in 20s regardless.
+                        // Respect Retry-After if they send one; otherwise
+                        // double the normal cadence per consecutive 429,
+                        // capped at 5 minutes.
+                        consecutive_429s++;
+                        String retry_after = http.header("Retry-After");
+                        int retry_secs = retry_after.length() ? retry_after.toInt() : 0;
+                        if (retry_secs > 0) {
+                            extra_delay_ms = (uint32_t)retry_secs * 1000;
+                        } else {
+                            uint32_t mult = 1UL << (consecutive_429s > 4 ? 4 : consecutive_429s);
+                            extra_delay_ms = 20000UL * mult;
+                            if (extra_delay_ms > 300000UL) extra_delay_ms = 300000UL;
+                        }
+                        error_log_add("HTTP 429, backing off %lus", (unsigned long)(extra_delay_ms / 1000));
+                        Serial.printf("HTTP 429 (rate limited) -- backing off %lus\n",
+                            (unsigned long)(extra_delay_ms / 1000));
+                    } else {
+                        consecutive_429s = 0;
+                        // Don't log routine connection failures (-1) — transient SSL/network
+                        if (httpCode != -1) {
+                            error_log_add("HTTP %d", httpCode);
+                        }
+                        Serial.printf("HTTP error: %d\n", httpCode);
                     }
-                    Serial.printf("HTTP error: %d\n", httpCode);
                 }
                 http.end();
                 http_mutex_release();
@@ -628,7 +684,7 @@ static void fetch_task(void *param) {
             }
         }
 
-        vTaskDelay(pdMS_TO_TICKS(20000));
+        vTaskDelay(pdMS_TO_TICKS(extra_delay_ms > 20000 ? extra_delay_ms : 20000));
     }
 }
 
