@@ -57,10 +57,9 @@ static lv_obj_t *_highest_val = nullptr;
 static lv_obj_t *_lowest_val = nullptr;
 static lv_obj_t *_closest_val = nullptr;
 
-// Session stats
+// Session stats -- per-location (see stats.cpp)
 static lv_obj_t *_unique_val = nullptr;
 static lv_obj_t *_peak_val = nullptr;
-static lv_obj_t *_uptime_val = nullptr;
 
 // Top airlines
 static lv_obj_t *_airline_labels[5] = {};
@@ -68,7 +67,8 @@ static lv_obj_t *_airline_labels[5] = {};
 // Top types
 static lv_obj_t *_type_labels[5] = {};
 
-// System health
+// System health -- genuinely device-global, doesn't reset on location switch
+static lv_obj_t *_uptime_val = nullptr;
 static lv_obj_t *_heap_val = nullptr;
 static lv_obj_t *_psram_val = nullptr;
 static lv_obj_t *_watermark_val = nullptr;
@@ -443,12 +443,15 @@ void stats_view_init(lv_obj_t *parent, AircraftList *list) {
     _closest_val = make_rec_row("CLOSEST", rr + rh * 4);
     lv_obj_set_style_text_color(_closest_val, lv_color_hex(0x44ddaa), 0);
 
-    // Session
+    // Session -- scoped to whichever location is currently active (see
+    // stats.cpp: resets on location change), unlike SYSTEM/NETWORK below
+    // which are genuinely device-global. UPTIME lives in SYSTEM instead of
+    // here for exactly that reason -- it doesn't reset when you switch
+    // locations, so grouping it with UNIQUE/PEAK would be misleading.
     int ss_y = rr + rh * 5 + 10;
     create_section_header(_container, "SESSION", lx, ss_y);
     _unique_val = create_stat_pair(_container, "UNIQUE", lx, ss_y + 18, ACCENT_COLOR);
     _peak_val = create_stat_pair(_container, "PEAK", lx + 80, ss_y + 18, ACCENT_COLOR);
-    _uptime_val = create_stat_pair(_container, "UPTIME", lx + 150, ss_y + 18, ACCENT_COLOR);
 
     // Top airlines
     int al_y = ss_y + 56;
@@ -501,6 +504,7 @@ void stats_view_init(lv_obj_t *parent, AircraftList *list) {
     create_section_header(_container, "SYSTEM", cx, sy);
 
     _heap_val = create_stat_pair(_container, "HEAP", cx, sy + 18, SYS_COLOR);
+    _uptime_val = create_stat_pair(_container, "UPTIME", cx + 120, sy + 18, SYS_COLOR);
     _psram_val = create_stat_pair(_container, "PSRAM", cx, sy + 52, SYS_COLOR);
 
     // Compact row: TEMP / FPS / TASKS / OBJS

@@ -2,6 +2,7 @@
 #include "stats.h"
 #include "geo.h"
 #include "../data/storage.h"
+#include "../data/locations.h"
 #include <cstring>
 #include <cstdlib>
 
@@ -11,6 +12,16 @@ static SessionStats _stats;
 #define MAX_UNIQUE 2000
 static char _seen_icaos[MAX_UNIQUE][7];
 static int _seen_count = 0;
+
+// unique_seen/peak_count/top_types/top_airlines are meant to describe
+// whichever location is currently selected (see stats_view.cpp's per-column
+// global-vs-per-location split) -- without this, switching from Home to a
+// saved airport (or back) kept accumulating into the same global counters,
+// so e.g. "UNIQUE" silently became "unique aircraft across every location
+// you've ever viewed since boot" instead of "unique aircraft at the one
+// you're looking at now". Reset on location change; boot_time/UPTIME stays
+// genuinely global and is not reset here.
+static int _last_active_loc = -2; // sentinel so the very first call resets/syncs
 
 static bool already_seen(const char *icao) {
     for (int i = 0; i < _seen_count; i++) {
@@ -139,6 +150,18 @@ void stats_init() {
 void stats_update(AircraftList *list) {
     if (!list->lock(pdMS_TO_TICKS(50))) return;
 
+    int active_loc = locations_active_index();
+    if (active_loc != _last_active_loc) {
+        _last_active_loc = active_loc;
+        _seen_count = 0;
+        _type_track_count = 0;
+        _airline_track_count = 0;
+        _stats.peak_count = 0;
+        _stats.unique_seen = 0;
+        memset(_stats.top_types, 0, sizeof(_stats.top_types));
+        memset(_stats.top_airlines, 0, sizeof(_stats.top_airlines));
+    }
+
     _stats.current_count = 0;
     _stats.jets = 0;
     _stats.ga = 0;
@@ -167,6 +190,13 @@ void stats_update(AircraftList *list) {
     _stats.spd_fast = 0;
     _stats.spd_very_fast = 0;
     _stats.spd_extreme = 0;
+
+    // CLOSEST should measure from wherever is actually being viewed, not
+    // always Home -- falls back to Home's coords if the active location was
+    // somehow removed out from under us (locations_get_active_coords()
+    // leaves these untouched on failure).
+    float ref_lat = g_config.home_lat, ref_lon = g_config.home_lon;
+    locations_get_active_coords(&ref_lat, &ref_lon, nullptr);
 
     uint32_t now = millis();
 
@@ -241,7 +271,7 @@ void stats_update(AircraftList *list) {
             }
         }
 
-        float d = MapProjection::distance_nm(g_config.home_lat, g_config.home_lon, ac.lat, ac.lon);
+        float d = MapProjection::distance_nm(ref_lat, ref_lon, ac.lat, ac.lon);
         if (d < _stats.closest_dist) {
             _stats.closest_dist = d;
             strlcpy(_stats.closest_callsign,
