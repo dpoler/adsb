@@ -257,6 +257,10 @@ void status_bar_set_active_dot(int view_index) {
     else lv_obj_add_flag(tag_chip, LV_OBJ_FLAG_HIDDEN);
 }
 
+int status_bar_get_trails_chip_x() {
+    return lv_obj_get_x(trails_chip);
+}
+
 void status_bar_set_auto_indicator(bool visible) {
     if (visible) {
         lv_obj_clear_flag(auto_label, LV_OBJ_FLAG_HIDDEN);

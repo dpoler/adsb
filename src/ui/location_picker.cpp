@@ -3,6 +3,7 @@
 #include "../data/storage.h"
 #include "../pins_config.h"
 #include "status_bar.h"
+#include "trail_menu.h"
 #include <Arduino.h>
 #include <cstring>
 #include <cctype>
@@ -78,6 +79,7 @@ static void select_location(int idx) {
 
 static void open_overlay() {
     if (_overlay) return;
+    trail_menu_close(); // only one status-bar popover open at a time
 
     _overlay = lv_obj_create(lv_screen_active());
     lv_obj_set_size(_overlay, LCD_H_RES, LCD_V_RES - STATUS_BAR_HEIGHT);
@@ -111,6 +113,10 @@ static void open_overlay() {
 static void picker_btn_click_cb(lv_event_t *e) {
     if (_overlay) close_overlay();
     else open_overlay();
+}
+
+void location_picker_close() {
+    close_overlay();
 }
 
 static void add_row_click_cb(lv_event_t *e) {

@@ -27,3 +27,9 @@ void status_bar_set_gear_callback(lv_event_cb_t cb);
 
 // Show/hide the AUTO cycle indicator near view dots
 void status_bar_set_auto_indicator(bool visible);
+
+// Screen x of the TRAIL chip -- its own popover (trail_menu.cpp) anchors
+// under this instead of a hardcoded position, since (unlike the location
+// picker chip at the fixed LOCATION_CHIP_X) this chip's x depends on
+// NUM_VIEWS/screen width and is only known once the bar is actually built.
+int status_bar_get_trails_chip_x();

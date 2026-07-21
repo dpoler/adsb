@@ -4,11 +4,12 @@
 #include "radar_view.h"
 #include "views.h"
 #include "status_bar.h"
+#include "location_picker.h"
 #include "../pins_config.h"
 #include "../data/storage.h"
 
 #define PANEL_W 260
-#define PANEL_H 170
+#define PANEL_H 180
 
 #define COLOR_PANEL  lv_color_hex(0x14142a)
 #define COLOR_ACCENT lv_color_hex(0x00cc66)
@@ -36,6 +37,7 @@ static void close_overlay() {
 
 static void open_overlay() {
     if (_overlay) return;
+    location_picker_close(); // only one status-bar popover open at a time
 
     _overlay = lv_obj_create(lv_screen_active());
     lv_obj_set_size(_overlay, LCD_H_RES, LCD_V_RES - STATUS_BAR_HEIGHT);
@@ -50,9 +52,16 @@ static void open_overlay() {
         if (lv_event_get_target_obj(e) == _overlay) close_overlay();
     }, LV_EVENT_CLICKED, nullptr);
 
+    // Anchored under the TRAIL chip itself (same idea as the location
+    // picker's popover appearing under its own button) instead of a fixed
+    // top-left position unrelated to where the chip actually is -- clamped
+    // so it can't run off the right edge of the screen.
+    int px = status_bar_get_trails_chip_x();
+    if (px + PANEL_W > LCD_H_RES - 8) px = LCD_H_RES - PANEL_W - 8;
+
     _panel = lv_obj_create(_overlay);
     lv_obj_set_size(_panel, PANEL_W, PANEL_H);
-    lv_obj_set_pos(_panel, 8, 8);
+    lv_obj_set_pos(_panel, px, 8);
     lv_obj_set_style_bg_color(_panel, COLOR_PANEL, 0);
     lv_obj_set_style_bg_opa(_panel, LV_OPA_COVER, 0);
     lv_obj_set_style_border_width(_panel, 1, 0);
@@ -130,6 +139,10 @@ static void open_overlay() {
         int v = views_get_active_index();
         if (v == VIEW_MAP) map_view_clear_trails();
         else if (v == VIEW_RADAR) radar_view_clear_trails();
+        // Close so the (otherwise dimmed-by-the-overlay) map/radar canvas is
+        // immediately visible again -- the clearest confirmation that this
+        // actually did something.
+        close_overlay();
     }, LV_EVENT_CLICKED, nullptr);
 
     lv_obj_t *clear_lbl = lv_label_create(clear_btn);
@@ -141,4 +154,8 @@ static void open_overlay() {
 void trail_menu_toggle() {
     if (_overlay) close_overlay();
     else open_overlay();
+}
+
+void trail_menu_close() {
+    close_overlay();
 }
