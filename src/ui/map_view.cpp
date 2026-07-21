@@ -372,22 +372,25 @@ static void draw_home_reference_elsewhere(lv_layer_t *layer) {
     int hx, hy;
     if (!_proj.to_screen(g_config.home_lat, g_config.home_lon, hx, hy)) return;
 
+    // Dimmed to match draw_airport_glyph()'s own opacity (LV_OPA_70/80) --
+    // this marker shouldn't outshine the airport reference points it sits
+    // alongside, just read distinctly from them (dot vs. their "+").
     lv_draw_rect_dsc_t dot;
     lv_draw_rect_dsc_init(&dot);
     dot.bg_color = COLOR_HOME_REF;
-    dot.bg_opa = LV_OPA_COVER;
+    dot.bg_opa = LV_OPA_70;
     dot.radius = LV_RADIUS_CIRCLE;
-    lv_area_t area = {(lv_coord_t)(hx - 4), (lv_coord_t)(hy - 4),
-                       (lv_coord_t)(hx + 4), (lv_coord_t)(hy + 4)};
+    lv_area_t area = {(lv_coord_t)(hx - 3), (lv_coord_t)(hy - 3),
+                       (lv_coord_t)(hx + 3), (lv_coord_t)(hy + 3)};
     lv_draw_rect(layer, &dot, &area);
 
     lv_draw_label_dsc_t lbl;
     lv_draw_label_dsc_init(&lbl);
     lbl.color = COLOR_HOME_REF;
     lbl.font = &lv_font_montserrat_14;
-    lbl.opa = LV_OPA_90;
+    lbl.opa = LV_OPA_80;
     lbl.text = "HOME";
-    lv_area_t larea = {(lv_coord_t)(hx + 7), (lv_coord_t)(hy - 8),
+    lv_area_t larea = {(lv_coord_t)(hx + 6), (lv_coord_t)(hy - 8),
                         (lv_coord_t)(hx + 60), (lv_coord_t)(hy + 8)};
     lv_draw_label(layer, &lbl, &larea);
 }
