@@ -33,6 +33,7 @@ struct UserConfig {
 
     // Display filters
     bool hide_ground;          // don't show aircraft with on_ground flag set
+    bool hide_callsigns;       // TAG chip -- don't show callsign/altitude labels next to aircraft
 
     // Resume-on-boot state -- all written from discrete, human-paced actions
     // (nav tap, range chip tap, location picker selection, filter button

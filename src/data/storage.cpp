@@ -32,6 +32,7 @@ UserConfig storage_load_config() {
     cfg.trail_max_points = 30;
     cfg.trail_style = 0;
     cfg.hide_ground = false;
+    cfg.hide_callsigns = false;
     cfg.last_view_idx = 0;   // VIEW_MAP
     cfg.last_range_idx = 0;  // widest preset
     cfg.last_location_icao[0] = '\0'; // Home
@@ -65,6 +66,7 @@ UserConfig storage_load_config() {
     cfg.trail_max_points = _prefs.getInt("trail_pts", cfg.trail_max_points);
     cfg.trail_style = _prefs.getInt("trail_sty", cfg.trail_style);
     cfg.hide_ground = _prefs.getBool("hide_gnd", cfg.hide_ground);
+    cfg.hide_callsigns = _prefs.getBool("hide_tags", cfg.hide_callsigns);
     cfg.last_view_idx = _prefs.getInt("last_view", cfg.last_view_idx);
     cfg.last_range_idx = _prefs.getInt("last_rng", cfg.last_range_idx);
     if (_prefs.isKey("last_loc"))
@@ -101,6 +103,7 @@ void storage_save_config(const UserConfig &cfg) {
     _prefs.putInt("trail_pts", cfg.trail_max_points);
     _prefs.putInt("trail_sty", cfg.trail_style);
     _prefs.putBool("hide_gnd", cfg.hide_ground);
+    _prefs.putBool("hide_tags", cfg.hide_callsigns);
     _prefs.putInt("last_view", cfg.last_view_idx);
     _prefs.putInt("last_rng", cfg.last_range_idx);
     _prefs.putString("last_loc", cfg.last_location_icao);

@@ -23,6 +23,14 @@ static lv_obj_t *_len_label = nullptr;
 
 static void close_overlay() {
     if (_overlay) {
+        // Guaranteed flush -- a backstop for whatever the in-memory
+        // g_config.trails_enabled/trail_max_points ended up as, regardless
+        // of whether every individual widget-level save fired (reported:
+        // trail settings sometimes not surviving a reboot). Closing the
+        // popover is a single discrete event, not a hot path, so an extra
+        // write here is cheap.
+        storage_save_config(g_config);
+
         // Same hide-then-delete-async pattern as location_picker.cpp -- this
         // can run from a click event on a descendant (the switch/slider/
         // clear button all live under _overlay), and deleting an ancestor of
@@ -136,6 +144,15 @@ static void open_overlay() {
     lv_obj_add_event_cb(slider, [](lv_event_t *e) {
         storage_save_config(g_config);
     }, LV_EVENT_RELEASED, nullptr);
+    // A drag that ends with the finger slipping off the slider's bounds
+    // (easy to do on a touchscreen) fires PRESS_LOST instead of RELEASED --
+    // without this, that specific release pattern would skip the save
+    // entirely (the popover-close backstop above only helps if the popover
+    // is actually closed afterward, not if power is lost while it's still
+    // open).
+    lv_obj_add_event_cb(slider, [](lv_event_t *e) {
+        storage_save_config(g_config);
+    }, LV_EVENT_PRESS_LOST, nullptr);
 
     // Clear now -- dispatches to whichever of Map/Radar is currently active,
     // same as the chip's old direct-clear behavior.
