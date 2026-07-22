@@ -266,11 +266,24 @@ static void update_filter_visuals() {
     if (_canvas) lv_obj_invalidate(_canvas);
 }
 
+static void update_gnd_visual(); // defined below -- filter_click_cb needs it for VERT/GND mutual exclusion
+
 static void filter_click_cb(lv_event_t *e) {
     int idx = (int)(intptr_t)lv_event_get_user_data(e);
     _filter_just_clicked = true; // prevent zoom cycle
     filter_toggle(idx);
     update_filter_visuals();
+
+    // VERT and GND are mutually exclusive -- VERT's own match logic already
+    // requires an aircraft be airborne (see filters.cpp), so GND claiming to
+    // show ground traffic while VERT is active is a standing contradiction.
+    // Enabling VERT switches GND off automatically. Same logic in
+    // radar_view.cpp/arrivals_view.cpp.
+    if (idx == FILT_VERT && (filter_get_active() & (1u << FILT_VERT)) && !g_config.hide_ground) {
+        g_config.hide_ground = true;
+        storage_save_config(g_config);
+        update_gnd_visual();
+    }
 }
 
 #define COLOR_GND lv_color_hex(0x9c9482) // stone-grey, echoes the "GND" swatch in the altitude legend (altitude_color(0), geo.h) rather than an arbitrary hue
@@ -303,6 +316,14 @@ static void gnd_click_cb(lv_event_t *e) {
     g_config.hide_ground = !g_config.hide_ground;
     storage_save_config(g_config);
     update_gnd_visual();
+
+    // Reverse direction of the mutual exclusion above: turning GND on (now
+    // showing ground traffic) while VERT is active would immediately be
+    // contradicted by VERT hiding all ground traffic anyway.
+    if (!g_config.hide_ground && (filter_get_active() & (1u << FILT_VERT))) {
+        filter_toggle(FILT_VERT);
+        update_filter_visuals();
+    }
 }
 
 static void draw_range_rings(lv_layer_t *layer) {

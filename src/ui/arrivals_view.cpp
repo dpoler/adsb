@@ -247,6 +247,13 @@ static void gnd_click_cb(lv_event_t *e) {
     g_config.hide_ground = !g_config.hide_ground;
     storage_save_config(g_config);
     update_gnd_visual();
+
+    // Reverse direction -- see map_view.cpp's gnd_click_cb for the full
+    // rationale.
+    if (!g_config.hide_ground && (filter_get_active() & (1u << FILT_VERT))) {
+        filter_toggle(FILT_VERT);
+        update_filter_visuals();
+    }
 }
 
 // Update board data from aircraft list
@@ -387,6 +394,15 @@ static void filter_click_cb(lv_event_t *e) {
     _filter_just_clicked = true;
     filter_toggle(idx);
     update_filter_visuals();
+
+    // VERT and GND are mutually exclusive -- see map_view.cpp's
+    // filter_click_cb for the full rationale.
+    if (idx == FILT_VERT && (filter_get_active() & (1u << FILT_VERT)) && !g_config.hide_ground) {
+        g_config.hide_ground = true;
+        storage_save_config(g_config);
+        update_gnd_visual();
+    }
+
     update_board(nullptr); // refresh immediately rather than waiting for the next 2s tick
 }
 
