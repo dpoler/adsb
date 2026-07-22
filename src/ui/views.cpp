@@ -151,6 +151,28 @@ lv_obj_t *views_get_tileview() {
     return tileview;
 }
 
+void views_resume_last_view() {
+    // Resume the view active at last shutdown/reboot instead of always
+    // booting into Map -- last_view_idx is only ever written from a
+    // deliberate nav tap/swipe (views_switch_to), never from the auto-cycle
+    // timer, so this reflects where the user actually left off.
+    //
+    // Deliberately called by main.cpp only after detail_card_init()/
+    // alerts_init() have run: switching tiles here can synchronously fire
+    // tileview_changed_cb, which calls detail_card_hide()/alerts_dismiss() --
+    // those touch widgets that don't exist yet if this runs any earlier
+    // (views_init() itself runs before either of those two).
+    int start_idx = g_config.last_view_idx;
+    if (start_idx < 0 || start_idx >= NUM_VIEWS) start_idx = VIEW_MAP;
+    // _active_index is still its static-init default (VIEW_MAP) at this
+    // point -- nothing to do if that's also where we're resuming to.
+    if (start_idx == _active_index) return;
+    _active_index = start_idx;
+    status_bar_set_active_dot(start_idx);
+    lv_tileview_set_tile_by_index(tileview, start_idx, 0, LV_ANIM_OFF);
+    if (start_idx == VIEW_ARRIVALS) arrivals_view_on_show();
+}
+
 void views_switch_to(int idx) {
     if (idx < 0 || idx >= NUM_VIEWS) return;
     _active_index = idx;
@@ -162,6 +184,16 @@ void views_switch_to(int idx) {
     detail_card_hide();
     alerts_dismiss();
     views_pause_cycle();
+
+    // Persist for resume-on-boot -- deliberately only from this
+    // deliberate-switch path (nav tap / swipe gesture), not from
+    // cycle_timer_cb's automatic advance, which would mean a blocking NVS
+    // write every ~15s while auto-cycling (the same class of bug fixed for
+    // the trail-length slider).
+    if (g_config.last_view_idx != idx) {
+        g_config.last_view_idx = idx;
+        storage_save_config(g_config);
+    }
 }
 
 static bool _swipe_active = false;

@@ -40,6 +40,12 @@ void range_set_levels(const int *nm_values, int count) {
     if (_idx >= _count) _idx = 0;
 }
 
+void range_set_index(int idx) {
+    if (idx < 0) idx = 0;
+    if (idx >= _count) idx = _count - 1;
+    _idx = idx;
+}
+
 void range_set_default(int nm) {
     int best = 0;
     float best_diff = fabsf((float)nm - _levels[0]);

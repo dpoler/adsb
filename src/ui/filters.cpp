@@ -1,6 +1,7 @@
 #include "filters.h"
 #include "aircraft_icons.h" // classify_icon() -- reused below for FILT_GA
 #include "../data/locations.h" // locations_get_active_coords() -- reused below for FILT_VERT's AGL check
+#include "../data/storage.h" // g_config.last_filter_mask -- resume-on-boot persistence
 #include <cstring>
 #include <cstdio>
 
@@ -15,10 +16,21 @@ const FilterDef filter_defs[NUM_FILTERS] = {
 
 static unsigned _active_mask = 0;
 
+void filters_init() {
+    // Mask off any stray high bits from a stale/corrupt NVS value rather
+    // than trusting it outright.
+    _active_mask = g_config.last_filter_mask & ((1u << NUM_FILTERS) - 1);
+}
+
 unsigned filter_get_active() { return _active_mask; }
 
 void filter_toggle(int idx) {
     _active_mask ^= (1u << idx);
+    // Every call site is a discrete button tap (never a high-frequency path
+    // like a slider drag), so persisting immediately is safe -- see the
+    // trail-length slider's cyan-flash fix for why that distinction matters.
+    g_config.last_filter_mask = _active_mask;
+    storage_save_config(g_config);
 }
 
 int filter_label_text(char *buf, size_t buf_size, lv_color_t *color) {

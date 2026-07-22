@@ -20,6 +20,7 @@
 #include "ui/map_view.h"
 #include "ui/radar_view.h"
 #include "ui/arrivals_view.h"
+#include "ui/filters.h"
 #include "data/storage.h"
 #include "data/error_log.h"
 #include "data/enrichment.h"
@@ -136,6 +137,7 @@ void setup() {
     // Load config before UI so views init with the correct range
     g_config = storage_load_config();
     locations_init();
+    filters_init();
 
     // Create UI — LVGL must be fully set up before background tasks
     lv_obj_t *screen = lv_screen_active();
@@ -144,9 +146,12 @@ void setup() {
     lv_obj_clear_flag(screen, LV_OBJ_FLAG_SCROLLABLE);
 
     // Range must be set up before the status bar -- it now owns the shared
-    // range chip and reads range_label() once at creation time.
+    // range chip and reads range_label() once at creation time. Resume the
+    // exact radius index last used (not range_set_default's "nearest to
+    // radius_nm" approximation -- radius_nm is just the widest preset, we
+    // have the literal last-used index now).
     range_set_levels(g_config.radius_presets, 4);
-    range_set_default(g_config.radius_nm);
+    range_set_index(g_config.last_range_idx);
 
     Serial.println("Creating status bar...");
     status_bar_create(screen);
@@ -169,6 +174,10 @@ void setup() {
     alerts_init(screen);
     Serial.println("alerts OK");
 
+    // Must come after detail_card_init()/alerts_init() -- switching tiles
+    // here can synchronously fire a callback that touches both.
+    views_resume_last_view();
+
     Serial.println("settings_init...");
     settings_init(screen);
     Serial.println("settings OK");
@@ -183,7 +192,14 @@ void setup() {
                                        sizeof(g_config.radius_presets)) != 0);
         g_config = *cfg;
         range_set_levels(cfg->radius_presets, 4);
-        if (presets_changed) range_set_default(cfg->radius_nm);
+        if (presets_changed) {
+            range_set_default(cfg->radius_nm);
+            // Keep the resume-on-boot index in sync with the reset this just
+            // triggered -- a one-off extra write, not a concern here since
+            // this only runs once per Settings save.
+            g_config.last_range_idx = range_get_index();
+            storage_save_config(g_config);
+        }
         if (locations_active_index() == -1) { // don't yank the view off a saved airport
             map_view_center_on(cfg->home_lat, cfg->home_lon);
             radar_view_set_home(cfg->home_lat, cfg->home_lon);

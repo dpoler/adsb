@@ -6,6 +6,7 @@
 #include "trail_menu.h"
 #include "../pins_config.h"
 #include "../data/fetcher.h"
+#include "../data/storage.h"
 
 static lv_obj_t *wifi_icon;
 static lv_obj_t *ac_count_label;
@@ -79,6 +80,14 @@ lv_obj_t *status_bar_create(lv_obj_t *parent) {
     lv_obj_add_event_cb(range_chip, [](lv_event_t *e) {
         range_cycle();
         lv_label_set_text(range_lbl, range_label());
+        // Persist for resume-on-boot -- only this manual tap, not the
+        // auto-cycle timer's own range_cycle() call (views.cpp), which would
+        // mean a blocking NVS write roughly once a minute while auto-cycling.
+        int idx = range_get_index();
+        if (g_config.last_range_idx != idx) {
+            g_config.last_range_idx = idx;
+            storage_save_config(g_config);
+        }
     }, LV_EVENT_CLICKED, nullptr);
 
     range_lbl = lv_label_create(range_chip);

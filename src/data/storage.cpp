@@ -32,9 +32,10 @@ UserConfig storage_load_config() {
     cfg.trail_max_points = 30;
     cfg.trail_style = 0;
     cfg.hide_ground = false;
-    cfg.map_zoom_idx = 1;    // 50nm default
-    cfg.radar_zoom_idx = 0;  // 100nm default
-    cfg.arrivals_filter_idx = 4; // ALL default
+    cfg.last_view_idx = 0;   // VIEW_MAP
+    cfg.last_range_idx = 0;  // widest preset
+    cfg.last_location_icao[0] = '\0'; // Home
+    cfg.last_filter_mask = 0; // no filters active
 
     _prefs.begin("adsb", true); // read-only
 
@@ -63,10 +64,12 @@ UserConfig storage_load_config() {
     cfg.trails_enabled = _prefs.getBool("trail_on", cfg.trails_enabled);
     cfg.trail_max_points = _prefs.getInt("trail_pts", cfg.trail_max_points);
     cfg.trail_style = _prefs.getInt("trail_sty", cfg.trail_style);
-    cfg.map_zoom_idx = _prefs.getInt("map_zoom", cfg.map_zoom_idx);
-    cfg.radar_zoom_idx = _prefs.getInt("rdr_zoom", cfg.radar_zoom_idx);
-    cfg.arrivals_filter_idx = _prefs.getInt("arr_filt", cfg.arrivals_filter_idx);
     cfg.hide_ground = _prefs.getBool("hide_gnd", cfg.hide_ground);
+    cfg.last_view_idx = _prefs.getInt("last_view", cfg.last_view_idx);
+    cfg.last_range_idx = _prefs.getInt("last_rng", cfg.last_range_idx);
+    if (_prefs.isKey("last_loc"))
+        strlcpy(cfg.last_location_icao, _prefs.getString("last_loc", cfg.last_location_icao).c_str(), sizeof(cfg.last_location_icao));
+    cfg.last_filter_mask = _prefs.getUInt("last_filt", cfg.last_filter_mask);
 
     _prefs.end();
     Serial.println("Storage: config loaded from NVS");
@@ -97,10 +100,11 @@ void storage_save_config(const UserConfig &cfg) {
     _prefs.putBool("trail_on", cfg.trails_enabled);
     _prefs.putInt("trail_pts", cfg.trail_max_points);
     _prefs.putInt("trail_sty", cfg.trail_style);
-    _prefs.putInt("map_zoom", cfg.map_zoom_idx);
-    _prefs.putInt("rdr_zoom", cfg.radar_zoom_idx);
-    _prefs.putInt("arr_filt", cfg.arrivals_filter_idx);
     _prefs.putBool("hide_gnd", cfg.hide_ground);
+    _prefs.putInt("last_view", cfg.last_view_idx);
+    _prefs.putInt("last_rng", cfg.last_range_idx);
+    _prefs.putString("last_loc", cfg.last_location_icao);
+    _prefs.putUInt("last_filt", cfg.last_filter_mask);
 
     _prefs.end();
     Serial.println("Storage: config saved to NVS");

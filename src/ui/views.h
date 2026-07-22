@@ -25,6 +25,10 @@ lv_obj_t *views_get_tileview();
 // Switch to a view by index — updates all state immediately, no tileview callback needed
 void views_switch_to(int idx);
 
+// Resume the view active at last shutdown/reboot (g_config.last_view_idx).
+// Call after detail_card_init()/alerts_init() -- see views.cpp for why.
+void views_resume_last_view();
+
 // Pause auto-cycle (call when user manually selects a view)
 void views_pause_cycle();
 

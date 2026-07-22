@@ -34,10 +34,15 @@ struct UserConfig {
     // Display filters
     bool hide_ground;          // don't show aircraft with on_ground flag set
 
-    // Zoom indices (persisted per-view)
-    int map_zoom_idx;
-    int radar_zoom_idx;
-    int arrivals_filter_idx; // distance filter index for arrivals
+    // Resume-on-boot state -- all written from discrete, human-paced actions
+    // (nav tap, range chip tap, location picker selection, filter button
+    // tap), never from a high-frequency path like a slider drag, so an
+    // immediate storage_save_config() on each change is safe (see the
+    // trail-slider cyan-flash fix for why that distinction matters).
+    int last_view_idx;              // VIEW_MAP/VIEW_RADAR/VIEW_ARRIVALS/VIEW_STATS (views.h)
+    int last_range_idx;             // index into range.cpp's levels, 0 = widest
+    char last_location_icao[8];     // matches LOC_ICAO_LEN (locations.h); "" = Home
+    unsigned last_filter_mask;      // FILT_* bitmask (filters.h)
 };
 
 // Load config from NVS. Returns defaults if not found.

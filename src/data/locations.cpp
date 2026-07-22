@@ -150,7 +150,20 @@ void locations_init() {
     }
 
     _prefs.end();
-    _active_index = -1; // always boot on Home
+
+    // Resume-on-boot: restore whichever location was active last, matched by
+    // ICAO rather than raw index since a saved airport's position in
+    // _locations[] can shift across reboots (removals compact the array).
+    // Falls back to Home (-1) if it wasn't found (removed, or never set).
+    _active_index = -1;
+    if (g_config.last_location_icao[0]) {
+        for (int i = 0; i < _count; i++) {
+            if (strcmp(_locations[i].icao, g_config.last_location_icao) == 0) {
+                _active_index = i;
+                break;
+            }
+        }
+    }
 
     _add_mutex = xSemaphoreCreateMutex();
 
@@ -168,6 +181,7 @@ const Location* locations_get(int idx) {
 
 void locations_remove(int idx) {
     if (idx < 0 || idx >= _count) return;
+    bool was_active = (_active_index == idx);
     for (int i = idx; i < _count - 1; i++) {
         _locations[i] = _locations[i + 1];
     }
@@ -175,6 +189,13 @@ void locations_remove(int idx) {
     memset(&_locations[_count], 0, sizeof(Location));
     if (_active_index == idx) _active_index = -1;
     else if (_active_index > idx) _active_index--;
+    if (was_active && g_config.last_location_icao[0]) {
+        // Don't leave a stale ICAO in NVS pointing at a now-removed airport
+        // -- resuming would fall back to Home anyway (not found in
+        // locations_init()'s lookup), but clear it here for consistency.
+        g_config.last_location_icao[0] = '\0';
+        storage_save_config(g_config);
+    }
     save_all();
 }
 
@@ -185,6 +206,15 @@ int locations_active_index() {
 void locations_set_active(int idx) {
     if (idx < -1 || idx >= _count) return;
     _active_index = idx;
+
+    // Persist for resume-on-boot -- this is only ever called from the
+    // location picker's own row-tap handler, a discrete human action, so an
+    // immediate NVS write is safe.
+    const char *icao = (idx == -1) ? "" : _locations[idx].icao;
+    if (strcmp(g_config.last_location_icao, icao) != 0) {
+        strlcpy(g_config.last_location_icao, icao, sizeof(g_config.last_location_icao));
+        storage_save_config(g_config);
+    }
 }
 
 bool locations_get_active_coords(float *lat, float *lon, int *elevation_ft) {
