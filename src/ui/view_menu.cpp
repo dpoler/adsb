@@ -10,7 +10,7 @@
 #include "../data/storage.h"
 
 #define PANEL_W 270
-#define PANEL_H 320
+#define PANEL_H 360
 
 #define COLOR_PANEL  lv_color_hex(0x14142a)
 #define COLOR_ACCENT lv_color_hex(0x00cc66)
@@ -64,7 +64,8 @@ static lv_obj_t *toggle_row(lv_obj_t *parent, const char *label, int y,
     lv_obj_set_pos(lbl, 0, y + 4);
 
     lv_obj_t *sw = lv_switch_create(parent);
-    lv_obj_set_pos(sw, PANEL_W - 20 - 46, y);
+    lv_obj_set_size(sw, 44, 22);
+    lv_obj_set_pos(sw, PANEL_W - 20 - 44, y);
     lv_obj_set_style_bg_color(sw, lv_color_hex(0x333366), 0);
     lv_obj_set_style_bg_color(sw, COLOR_ACCENT, LV_PART_INDICATOR | LV_STATE_CHECKED);
     if (initial) lv_obj_add_state(sw, LV_STATE_CHECKED);
@@ -108,18 +109,15 @@ static void open_overlay() {
     lv_obj_set_style_pad_all(_panel, 10, 0);
     lv_obj_clear_flag(_panel, LV_OBJ_FLAG_SCROLLABLE);
 
-    lv_obj_t *title = lv_label_create(_panel);
-    lv_label_set_text(title, "VIEW");
-    lv_obj_set_style_text_font(title, &lv_font_montserrat_16, 0);
-    lv_obj_set_style_text_color(title, COLOR_TEXT, 0);
-    lv_obj_set_pos(title, 0, 0);
+    // No "VIEW" title here -- the chip that opens this already says VIEW,
+    // right above it in the status bar.
 
     // ============================================================
     // Trails
     // ============================================================
-    section_header(_panel, "TRAILS", 26);
+    section_header(_panel, "TRAILS", 0);
 
-    toggle_row(_panel, "Show trails", 46, g_config.trails_enabled, [](lv_event_t *e) {
+    toggle_row(_panel, "Show trails", 26, g_config.trails_enabled, [](lv_event_t *e) {
         g_config.trails_enabled = lv_obj_has_state(lv_event_get_target_obj(e), LV_STATE_CHECKED);
         storage_save_config(g_config);
     });
@@ -134,17 +132,17 @@ static void open_overlay() {
     lv_label_set_text(len_lbl, "Trail Amount");
     lv_obj_set_style_text_font(len_lbl, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(len_lbl, COLOR_DIM, 0);
-    lv_obj_set_pos(len_lbl, 0, 74);
+    lv_obj_set_pos(len_lbl, 0, 62);
 
     _len_label = lv_label_create(_panel);
     lv_label_set_text_fmt(_len_label, "%d/60", g_config.trail_max_points);
     lv_obj_set_style_text_color(_len_label, lv_color_white(), 0);
     lv_obj_set_style_text_font(_len_label, &lv_font_montserrat_14, 0);
-    lv_obj_set_pos(_len_label, PANEL_W - 20 - 50, 74);
+    lv_obj_set_pos(_len_label, PANEL_W - 20 - 50, 62);
 
     lv_obj_t *slider = lv_slider_create(_panel);
     lv_obj_set_size(slider, PANEL_W - 20, 10);
-    lv_obj_set_pos(slider, 0, 98);
+    lv_obj_set_pos(slider, 0, 86);
     lv_slider_set_range(slider, 10, 60);
     lv_slider_set_value(slider, g_config.trail_max_points, LV_ANIM_OFF);
     lv_obj_set_style_bg_color(slider, lv_color_hex(0x333366), 0);
@@ -175,8 +173,8 @@ static void open_overlay() {
 
     // Clear now -- dispatches to whichever of Map/Radar is currently active.
     lv_obj_t *clear_btn = lv_obj_create(_panel);
-    lv_obj_set_size(clear_btn, PANEL_W - 20, 28);
-    lv_obj_set_pos(clear_btn, 0, 116);
+    lv_obj_set_size(clear_btn, PANEL_W - 20, 32);
+    lv_obj_set_pos(clear_btn, 0, 104);
     lv_obj_set_style_bg_color(clear_btn, COLOR_ROW, 0);
     lv_obj_set_style_border_color(clear_btn, COLOR_ACCENT, 0);
     lv_obj_set_style_border_width(clear_btn, 1, 0);
@@ -205,14 +203,14 @@ static void open_overlay() {
     // Type default off -- new capability on Map, stay minimal until turned
     // on (see storage.h).
     // ============================================================
-    section_header(_panel, "TAGS", 156);
-    toggle_row(_panel, "Flight ID", 176, tag_id_shown(), [](lv_event_t *e) {
+    section_header(_panel, "TAGS", 160);
+    toggle_row(_panel, "Flight ID", 188, tag_id_shown(), [](lv_event_t *e) {
         tag_id_toggle();
     });
-    toggle_row(_panel, "Alt / Speed", 202, tag_data_shown(), [](lv_event_t *e) {
+    toggle_row(_panel, "Alt / Speed", 222, tag_data_shown(), [](lv_event_t *e) {
         tag_data_toggle();
     });
-    toggle_row(_panel, "Type", 228, tag_type_shown(), [](lv_event_t *e) {
+    toggle_row(_panel, "Type", 256, tag_type_shown(), [](lv_event_t *e) {
         tag_type_toggle();
     });
 
@@ -220,8 +218,8 @@ static void open_overlay() {
     // Secondary locations -- other saved/static airports + the
     // HOME-elsewhere marker. Off gives the "just dots" look.
     // ============================================================
-    section_header(_panel, "LOCATIONS", 258);
-    toggle_row(_panel, "Other Airports", 278, secondary_locations_shown(), [](lv_event_t *e) {
+    section_header(_panel, "LOCATIONS", 290);
+    toggle_row(_panel, "Other Airports", 318, secondary_locations_shown(), [](lv_event_t *e) {
         secondary_locations_toggle();
     });
 }
