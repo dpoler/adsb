@@ -33,7 +33,18 @@ struct UserConfig {
 
     // Display filters
     bool hide_ground;          // don't show aircraft with on_ground flag set
-    bool hide_callsigns;       // TAG chip -- don't show callsign/altitude labels next to aircraft
+
+    // VIEW menu -- Map/Radar per-field tag toggles and secondary-location
+    // visibility (view_menu.cpp). show_tag_id defaults true (matches the
+    // callsign label both views always showed before this existed);
+    // show_tag_data/show_tag_type default false (new capability -- Map
+    // never showed this before, stay minimal until turned on);
+    // show_secondary_locations defaults true (matches the airport/HOME
+    // markers always being drawn before this existed).
+    bool show_tag_id;          // flight number, falling back to registration then ICAO hex
+    bool show_tag_data;        // altitude + speed + climb/descend arrow
+    bool show_tag_type;        // aircraft type / operator
+    bool show_secondary_locations; // other saved/static airports + HOME-elsewhere marker
 
     // Resume-on-boot state -- all written from discrete, human-paced actions
     // (nav tap, range chip tap, location picker selection, filter button

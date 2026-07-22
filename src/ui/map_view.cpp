@@ -724,18 +724,50 @@ static void draw_aircraft(lv_layer_t *layer) {
             lv_draw_arc(layer, &ring);
         }
 
-        // Draw callsign label -- toggled off by the status bar's TAG chip
-        if (!callsigns_hidden()) {
-            const char *label_text = ac.callsign[0] ? ac.callsign : ac.icao_hex;
+        // Tag labels -- up to 3 stacked lines, each independently toggled by
+        // the status bar's VIEW menu (view_menu.cpp): Flight ID, Alt/Speed,
+        // Type. Flight ID falls back callsign -> registration -> ICAO hex,
+        // and never shows registration once a callsign is showing (that's
+        // what Type would otherwise redundantly repeat).
+        if (tag_id_shown() || tag_data_shown() || tag_type_shown()) {
             lv_draw_label_dsc_t lbl_dsc;
             lv_draw_label_dsc_init(&lbl_dsc);
             lbl_dsc.color = color;
             lbl_dsc.font = &lv_font_montserrat_14;
             lbl_dsc.opa = (uint8_t)((ac_opa * LV_OPA_80) / 255);
-            lv_area_t lbl_area = {(lv_coord_t)(sx + 12), (lv_coord_t)(sy - 7),
-                                   (lv_coord_t)(sx + 130), (lv_coord_t)(sy + 10)};
-            lbl_dsc.text = label_text;
-            lv_draw_label(layer, &lbl_dsc, &lbl_area);
+
+            int line_y = sy - 7;
+            if (tag_id_shown()) {
+                const char *id_text = ac.callsign[0] ? ac.callsign :
+                                      (ac.registration[0] ? ac.registration : ac.icao_hex);
+                lbl_dsc.text = id_text;
+                lv_area_t a = {(lv_coord_t)(sx + 12), (lv_coord_t)line_y,
+                                (lv_coord_t)(sx + 130), (lv_coord_t)(line_y + 15)};
+                lv_draw_label(layer, &lbl_dsc, &a);
+                line_y += 14;
+            }
+            if (tag_data_shown()) {
+                char alt_str[12];
+                if (ac.on_ground) snprintf(alt_str, sizeof(alt_str), "GND");
+                else if (ac.altitude >= 18000) snprintf(alt_str, sizeof(alt_str), "FL%03d", ac.altitude / 100);
+                else snprintf(alt_str, sizeof(alt_str), "%d'", ac.altitude);
+                const char *vr_arrow = ac.vert_rate > 300 ? "^" : ac.vert_rate < -300 ? "v" : "";
+                char data_str[32];
+                snprintf(data_str, sizeof(data_str), "%s %dkt %s", alt_str, ac.speed, vr_arrow);
+                lbl_dsc.text = data_str;
+                lv_area_t a = {(lv_coord_t)(sx + 12), (lv_coord_t)line_y,
+                                (lv_coord_t)(sx + 150), (lv_coord_t)(line_y + 15)};
+                lv_draw_label(layer, &lbl_dsc, &a);
+                line_y += 14;
+            }
+            if (tag_type_shown()) {
+                const char *type_text = ac.owner_op[0] ? ac.owner_op :
+                                        (ac.desc[0] ? ac.desc : ac.type_code);
+                lbl_dsc.text = type_text;
+                lv_area_t a = {(lv_coord_t)(sx + 12), (lv_coord_t)line_y,
+                                (lv_coord_t)(sx + 150), (lv_coord_t)(line_y + 15)};
+                lv_draw_label(layer, &lbl_dsc, &a);
+            }
         }
     }
 
@@ -899,12 +931,16 @@ static void canvas_draw_cb(lv_event_t *e) {
     draw_static_background(layer);
 #endif
     draw_range_rings(layer);
-    draw_home_marker(layer);
-    draw_home_reference_elsewhere(layer);
+    // Secondary locations -- other airports + HOME-elsewhere marker.
+    // Off gives the "just dots" look (VIEW menu, view_menu.cpp).
+    if (secondary_locations_shown()) {
+        draw_home_marker(layer);
+        draw_home_reference_elsewhere(layer);
 #if HAS_AIRPORTS_DB
-    draw_static_airport_glyphs(layer);
+        draw_static_airport_glyphs(layer);
 #endif
-    draw_saved_airports(layer);
+        draw_saved_airports(layer);
+    }
     draw_aircraft(layer);
     draw_icon_legend(layer);
     draw_altitude_legend(layer);

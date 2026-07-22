@@ -1,15 +1,16 @@
 #include <Arduino.h>
-#include "trail_menu.h"
+#include "view_menu.h"
 #include "map_view.h"
 #include "radar_view.h"
 #include "views.h"
 #include "status_bar.h"
 #include "location_picker.h"
+#include "display_prefs.h"
 #include "../pins_config.h"
 #include "../data/storage.h"
 
-#define PANEL_W 260
-#define PANEL_H 180
+#define PANEL_W 270
+#define PANEL_H 320
 
 #define COLOR_PANEL  lv_color_hex(0x14142a)
 #define COLOR_ACCENT lv_color_hex(0x00cc66)
@@ -25,22 +26,50 @@ static void close_overlay() {
     if (_overlay) {
         // Guaranteed flush -- a backstop for whatever the in-memory
         // g_config.trails_enabled/trail_max_points ended up as, regardless
-        // of whether every individual widget-level save fired (reported:
-        // trail settings sometimes not surviving a reboot). Closing the
+        // of whether every individual widget-level save fired (this is
+        // what fixed trail settings not surviving a reboot). Closing the
         // popover is a single discrete event, not a hot path, so an extra
         // write here is cheap.
         storage_save_config(g_config);
 
         // Same hide-then-delete-async pattern as location_picker.cpp -- this
-        // can run from a click event on a descendant (the switch/slider/
-        // clear button all live under _overlay), and deleting an ancestor of
-        // a still-dispatching event is undefined behavior in LVGL.
+        // can run from a click event on a descendant (every switch/slider/
+        // button here lives under _overlay), and deleting an ancestor of a
+        // still-dispatching event is undefined behavior in LVGL.
         lv_obj_add_flag(_overlay, LV_OBJ_FLAG_HIDDEN);
         lv_obj_delete_async(_overlay);
         _overlay = nullptr;
         _panel = nullptr;
         _len_label = nullptr;
     }
+}
+
+static void section_header(lv_obj_t *parent, const char *text, int y) {
+    lv_obj_t *lbl = lv_label_create(parent);
+    lv_label_set_text(lbl, text);
+    lv_obj_set_style_text_font(lbl, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_color(lbl, COLOR_ACCENT, 0);
+    lv_obj_set_pos(lbl, 0, y);
+}
+
+// Shared row builder for every plain on/off toggle in this popover (tags,
+// secondary locations, and trails' own on/off) -- label on the left, a
+// switch on the right, same look/spacing throughout.
+static lv_obj_t *toggle_row(lv_obj_t *parent, const char *label, int y,
+                             bool initial, lv_event_cb_t cb) {
+    lv_obj_t *lbl = lv_label_create(parent);
+    lv_label_set_text(lbl, label);
+    lv_obj_set_style_text_font(lbl, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_color(lbl, COLOR_DIM, 0);
+    lv_obj_set_pos(lbl, 0, y + 4);
+
+    lv_obj_t *sw = lv_switch_create(parent);
+    lv_obj_set_pos(sw, PANEL_W - 20 - 46, y);
+    lv_obj_set_style_bg_color(sw, lv_color_hex(0x333366), 0);
+    lv_obj_set_style_bg_color(sw, COLOR_ACCENT, LV_PART_INDICATOR | LV_STATE_CHECKED);
+    if (initial) lv_obj_add_state(sw, LV_STATE_CHECKED);
+    lv_obj_add_event_cb(sw, cb, LV_EVENT_VALUE_CHANGED, nullptr);
+    return sw;
 }
 
 static void open_overlay() {
@@ -60,11 +89,11 @@ static void open_overlay() {
         if (lv_event_get_target_obj(e) == _overlay) close_overlay();
     }, LV_EVENT_CLICKED, nullptr);
 
-    // Anchored under the TRAIL chip itself (same idea as the location
+    // Anchored under the VIEW chip itself (same idea as the location
     // picker's popover appearing under its own button) instead of a fixed
     // top-left position unrelated to where the chip actually is -- clamped
     // so it can't run off the right edge of the screen.
-    int px = status_bar_get_trails_chip_x();
+    int px = status_bar_get_view_chip_x();
     if (px + PANEL_W > LCD_H_RES - 8) px = LCD_H_RES - PANEL_W - 8;
 
     _panel = lv_obj_create(_overlay);
@@ -80,51 +109,42 @@ static void open_overlay() {
     lv_obj_clear_flag(_panel, LV_OBJ_FLAG_SCROLLABLE);
 
     lv_obj_t *title = lv_label_create(_panel);
-    lv_label_set_text(title, "TRAILS");
+    lv_label_set_text(title, "VIEW");
     lv_obj_set_style_text_font(title, &lv_font_montserrat_16, 0);
     lv_obj_set_style_text_color(title, COLOR_TEXT, 0);
     lv_obj_set_pos(title, 0, 0);
 
-    // On/off
-    lv_obj_t *on_lbl = lv_label_create(_panel);
-    lv_label_set_text(on_lbl, "Show trails");
-    lv_obj_set_style_text_font(on_lbl, &lv_font_montserrat_14, 0);
-    lv_obj_set_style_text_color(on_lbl, COLOR_DIM, 0);
-    lv_obj_set_pos(on_lbl, 0, 32);
+    // ============================================================
+    // Trails
+    // ============================================================
+    section_header(_panel, "TRAILS", 26);
 
-    lv_obj_t *sw = lv_switch_create(_panel);
-    lv_obj_set_pos(sw, PANEL_W - 20 - 46, 26);
-    lv_obj_set_style_bg_color(sw, lv_color_hex(0x333366), 0);
-    lv_obj_set_style_bg_color(sw, COLOR_ACCENT, LV_PART_INDICATOR | LV_STATE_CHECKED);
-    if (g_config.trails_enabled) lv_obj_add_state(sw, LV_STATE_CHECKED);
-    // Same instant-apply-and-save pattern as the GND filter button
-    // (map_view.cpp etc.) -- no separate Save step for a quick-settings popover.
-    lv_obj_add_event_cb(sw, [](lv_event_t *e) {
+    toggle_row(_panel, "Show trails", 46, g_config.trails_enabled, [](lv_event_t *e) {
         g_config.trails_enabled = lv_obj_has_state(lv_event_get_target_obj(e), LV_STATE_CHECKED);
         storage_save_config(g_config);
-    }, LV_EVENT_VALUE_CHANGED, nullptr);
+    });
 
-    // Trail Amount -- not "Length" or a "pts" count anymore, since the
-    // effective on-screen trail is now scaled by the current view radius
-    // (see map_view.cpp/radar_view.cpp) rather than a literal absolute
-    // point count. "N/60" reads as a relative amount (out of the max
+    // "Trail Amount" -- not "Length" or a "pts" count, since the effective
+    // on-screen trail is scaled by the current view radius (see
+    // map_view.cpp/radar_view.cpp) rather than a literal absolute point
+    // count. "N/60" reads as a relative amount (out of the max
     // representable) instead of asserting a unit that isn't really true at
     // any zoom other than the widest radius preset.
     lv_obj_t *len_lbl = lv_label_create(_panel);
     lv_label_set_text(len_lbl, "Trail Amount");
     lv_obj_set_style_text_font(len_lbl, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(len_lbl, COLOR_DIM, 0);
-    lv_obj_set_pos(len_lbl, 0, 66);
+    lv_obj_set_pos(len_lbl, 0, 74);
 
     _len_label = lv_label_create(_panel);
     lv_label_set_text_fmt(_len_label, "%d/60", g_config.trail_max_points);
     lv_obj_set_style_text_color(_len_label, lv_color_white(), 0);
     lv_obj_set_style_text_font(_len_label, &lv_font_montserrat_14, 0);
-    lv_obj_set_pos(_len_label, PANEL_W - 20 - 50, 66);
+    lv_obj_set_pos(_len_label, PANEL_W - 20 - 50, 74);
 
     lv_obj_t *slider = lv_slider_create(_panel);
     lv_obj_set_size(slider, PANEL_W - 20, 10);
-    lv_obj_set_pos(slider, 0, 90);
+    lv_obj_set_pos(slider, 0, 98);
     lv_slider_set_range(slider, 10, 60);
     lv_slider_set_value(slider, g_config.trail_max_points, LV_ANIM_OFF);
     lv_obj_set_style_bg_color(slider, lv_color_hex(0x333366), 0);
@@ -132,10 +152,9 @@ static void open_overlay() {
     lv_obj_set_style_bg_color(slider, COLOR_ACCENT, LV_PART_KNOB);
     // VALUE_CHANGED fires repeatedly while dragging -- update the live value
     // and label on every tick (cheap, in-memory only), but only persist to
-    // NVS once on RELEASED. storage_save_config() is a blocking flash write;
-    // calling it on every drag tick was stalling the LCD refresh badly
-    // enough to cause a visible flash -- same root cause as the earlier
-    // cyan-flash-on-airport-delete bug (see project_backlog memory).
+    // NVS on RELEASED/PRESS_LOST. storage_save_config() is a blocking flash
+    // write; calling it on every drag tick stalls the LCD refresh badly
+    // enough to cause a visible flash (see project_backlog memory).
     lv_obj_add_event_cb(slider, [](lv_event_t *e) {
         int val = lv_slider_get_value(lv_event_get_target_obj(e));
         g_config.trail_max_points = val;
@@ -154,10 +173,9 @@ static void open_overlay() {
         storage_save_config(g_config);
     }, LV_EVENT_PRESS_LOST, nullptr);
 
-    // Clear now -- dispatches to whichever of Map/Radar is currently active,
-    // same as the chip's old direct-clear behavior.
+    // Clear now -- dispatches to whichever of Map/Radar is currently active.
     lv_obj_t *clear_btn = lv_obj_create(_panel);
-    lv_obj_set_size(clear_btn, PANEL_W - 20, 32);
+    lv_obj_set_size(clear_btn, PANEL_W - 20, 28);
     lv_obj_set_pos(clear_btn, 0, 116);
     lv_obj_set_style_bg_color(clear_btn, COLOR_ROW, 0);
     lv_obj_set_style_border_color(clear_btn, COLOR_ACCENT, 0);
@@ -179,13 +197,40 @@ static void open_overlay() {
     lv_label_set_text(clear_lbl, "Clear Now");
     lv_obj_set_style_text_color(clear_lbl, COLOR_ACCENT, 0);
     lv_obj_center(clear_lbl);
+
+    // ============================================================
+    // Tags -- each field independently toggleable. Flight ID falls back
+    // callsign -> registration -> ICAO hex (never shows registration
+    // alongside an existing callsign, per explicit feedback). Alt/Speed and
+    // Type default off -- new capability on Map, stay minimal until turned
+    // on (see storage.h).
+    // ============================================================
+    section_header(_panel, "TAGS", 156);
+    toggle_row(_panel, "Flight ID", 176, tag_id_shown(), [](lv_event_t *e) {
+        tag_id_toggle();
+    });
+    toggle_row(_panel, "Alt / Speed", 202, tag_data_shown(), [](lv_event_t *e) {
+        tag_data_toggle();
+    });
+    toggle_row(_panel, "Type", 228, tag_type_shown(), [](lv_event_t *e) {
+        tag_type_toggle();
+    });
+
+    // ============================================================
+    // Secondary locations -- other saved/static airports + the
+    // HOME-elsewhere marker. Off gives the "just dots" look.
+    // ============================================================
+    section_header(_panel, "LOCATIONS", 258);
+    toggle_row(_panel, "Other Airports", 278, secondary_locations_shown(), [](lv_event_t *e) {
+        secondary_locations_toggle();
+    });
 }
 
-void trail_menu_toggle() {
+void view_menu_toggle() {
     if (_overlay) close_overlay();
     else open_overlay();
 }
 
-void trail_menu_close() {
+void view_menu_close() {
     close_overlay();
 }

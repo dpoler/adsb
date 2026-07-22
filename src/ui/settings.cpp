@@ -270,8 +270,9 @@ void settings_init(lv_obj_t *parent) {
     _ta_lon = create_textarea(_panel, "-74.0060", lon_str, rx, 114);
 
     // Aircraft Trails on/off, length, and clear are now consolidated in the
-    // TRAIL chip's own popover (status_bar.cpp -> trail_menu.cpp) instead of
-    // living here -- see the "consolidate trail controls" backlog note.
+    // status bar's VIEW chip popover (status_bar.cpp -> view_menu.cpp)
+    // instead of living here -- see the "consolidate trail controls"
+    // backlog note.
 
     // Auto-cycle -- shifted up into the space the Trails controls used to
     // occupy above.

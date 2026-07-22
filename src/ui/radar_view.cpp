@@ -263,115 +263,108 @@ static void draw_blips(lv_layer_t *layer) {
                           (lv_coord_t)(sx + 4), (lv_coord_t)(sy + 4)};
         lv_draw_rect(layer, &dot, &area);
 
-        // Labels — two zones: paint detail (0-45deg) and condensed (45-240deg).
-        // The whole block is toggled off by the status bar's TAG chip -- not
-        // just the callsign line, since the label as a whole is the
-        // "callsign/altitude readout" (ATC data tag) it's named after.
-        if (behind < LABEL_VISIBLE_DEG && !callsigns_hidden()) {
+        // Labels — two zones: paint detail (0-45deg) and condensed
+        // (45-240deg). Each of Flight ID / Alt-Speed / Type is independently
+        // toggled by the status bar's VIEW menu (view_menu.cpp). Flight ID
+        // falls back callsign -> registration -> ICAO hex, and never shows
+        // registration once a callsign is showing (Type would otherwise
+        // redundantly repeat it) -- so there's no separate "registration"
+        // line anymore, unlike before this existed.
+        if (behind < LABEL_VISIBLE_DEG && (tag_id_shown() || tag_data_shown() || tag_type_shown())) {
             uint8_t lbl_opa = opa > LV_OPA_50 ? LV_OPA_80 : opa;
+            const char *id_text = ac.callsign[0] ? ac.callsign :
+                                  (ac.registration[0] ? ac.registration : ac.icao_hex);
 
             if (behind < PAINT_DETAIL_DEG) {
-                // === PAINT ZONE: expanded detail ===
-                // Line 1: Callsign
-                {
-                    const char *cs = ac.callsign[0] ? ac.callsign : ac.icao_hex;
+                // === PAINT ZONE: expanded detail -- stack whichever of the
+                // 3 fields are on, top to bottom ===
+                int line_y = sy - 28;
+                if (tag_id_shown()) {
                     char line1[48];
-                    strlcpy(line1, cs, sizeof(line1));
+                    strlcpy(line1, id_text, sizeof(line1));
                     lv_draw_label_dsc_t l1;
                     lv_draw_label_dsc_init(&l1);
                     l1.color = color;
                     l1.font = &lv_font_montserrat_14;
                     l1.opa = LV_OPA_COVER;
                     l1.text = line1;
-                    lv_area_t a1 = {(lv_coord_t)(sx + 8), (lv_coord_t)(sy - 28),
-                                    (lv_coord_t)(sx + 280), (lv_coord_t)(sy - 14)};
+                    lv_area_t a1 = {(lv_coord_t)(sx + 8), (lv_coord_t)line_y,
+                                    (lv_coord_t)(sx + 280), (lv_coord_t)(line_y + 14)};
                     lv_draw_label(layer, &l1, &a1);
+                    line_y += 14;
                 }
 
-                // Line 2: Operator or type description
-                char line2[48] = {};
-                if (ac.owner_op[0]) strlcpy(line2, ac.owner_op, sizeof(line2));
-                else if (ac.desc[0]) strlcpy(line2, ac.desc, sizeof(line2));
-                else strlcpy(line2, ac.type_code, sizeof(line2));
-                lv_draw_label_dsc_t l2;
-                lv_draw_label_dsc_init(&l2);
-                l2.color = color;
-                l2.font = &lv_font_montserrat_14;
-                l2.opa = (uint8_t)(LV_OPA_COVER * 3 / 4);
-                l2.text = line2;
-                lv_area_t a2 = {(lv_coord_t)(sx + 8), (lv_coord_t)(sy - 14),
-                                (lv_coord_t)(sx + 280), (lv_coord_t)(sy)};
-                lv_draw_label(layer, &l2, &a2);
-
-                // Line 3: Alt + speed + vert rate
-                char line3[48];
-                char alt_str[12];
-                if (ac.on_ground) snprintf(alt_str, sizeof(alt_str), "GND");
-                else if (ac.altitude >= 18000) snprintf(alt_str, sizeof(alt_str), "FL%03d", ac.altitude / 100);
-                else snprintf(alt_str, sizeof(alt_str), "%d'", ac.altitude);
-                const char *vr_arrow = ac.vert_rate > 300 ? "^" : ac.vert_rate < -300 ? "v" : "";
-                snprintf(line3, sizeof(line3), "%s %dkt %s", alt_str, ac.speed, vr_arrow);
-                lv_draw_label_dsc_t l3;
-                lv_draw_label_dsc_init(&l3);
-                l3.color = color;
-                l3.font = &lv_font_montserrat_14;
-                l3.opa = (uint8_t)(LV_OPA_COVER * 2 / 3);
-                l3.text = line3;
-                lv_area_t a3 = {(lv_coord_t)(sx + 8), (lv_coord_t)(sy),
-                                (lv_coord_t)(sx + 280), (lv_coord_t)(sy + 14)};
-                lv_draw_label(layer, &l3, &a3);
-
-                // Line 4: Registration + type code
-                char line4[24] = {};
-                if (ac.registration[0]) {
-                    snprintf(line4, sizeof(line4), "%s %s", ac.registration, ac.type_code);
+                if (tag_type_shown()) {
+                    char line2[48] = {};
+                    if (ac.owner_op[0]) strlcpy(line2, ac.owner_op, sizeof(line2));
+                    else if (ac.desc[0]) strlcpy(line2, ac.desc, sizeof(line2));
+                    else strlcpy(line2, ac.type_code, sizeof(line2));
+                    lv_draw_label_dsc_t l2;
+                    lv_draw_label_dsc_init(&l2);
+                    l2.color = color;
+                    l2.font = &lv_font_montserrat_14;
+                    l2.opa = (uint8_t)(LV_OPA_COVER * 3 / 4);
+                    l2.text = line2;
+                    lv_area_t a2 = {(lv_coord_t)(sx + 8), (lv_coord_t)line_y,
+                                    (lv_coord_t)(sx + 280), (lv_coord_t)(line_y + 14)};
+                    lv_draw_label(layer, &l2, &a2);
+                    line_y += 14;
                 }
-                if (line4[0]) {
-                    lv_draw_label_dsc_t l4;
-                    lv_draw_label_dsc_init(&l4);
-                    l4.color = color;
-                    l4.font = &lv_font_montserrat_14;
-                    l4.opa = (uint8_t)(LV_OPA_COVER / 2);
-                    l4.text = line4;
-                    lv_area_t a4 = {(lv_coord_t)(sx + 8), (lv_coord_t)(sy + 14),
-                                    (lv_coord_t)(sx + 200), (lv_coord_t)(sy + 28)};
-                    lv_draw_label(layer, &l4, &a4);
+
+                if (tag_data_shown()) {
+                    char line3[48];
+                    char alt_str[12];
+                    if (ac.on_ground) snprintf(alt_str, sizeof(alt_str), "GND");
+                    else if (ac.altitude >= 18000) snprintf(alt_str, sizeof(alt_str), "FL%03d", ac.altitude / 100);
+                    else snprintf(alt_str, sizeof(alt_str), "%d'", ac.altitude);
+                    const char *vr_arrow = ac.vert_rate > 300 ? "^" : ac.vert_rate < -300 ? "v" : "";
+                    snprintf(line3, sizeof(line3), "%s %dkt %s", alt_str, ac.speed, vr_arrow);
+                    lv_draw_label_dsc_t l3;
+                    lv_draw_label_dsc_init(&l3);
+                    l3.color = color;
+                    l3.font = &lv_font_montserrat_14;
+                    l3.opa = (uint8_t)(LV_OPA_COVER * 2 / 3);
+                    l3.text = line3;
+                    lv_area_t a3 = {(lv_coord_t)(sx + 8), (lv_coord_t)line_y,
+                                    (lv_coord_t)(sx + 280), (lv_coord_t)(line_y + 14)};
+                    lv_draw_label(layer, &l3, &a3);
                 }
             } else {
-                // === CONDENSED ZONE: callsign + alt/speed ===
-                const char *cs = ac.callsign[0] ? ac.callsign : ac.icao_hex;
-                char alt_str[12];
-                if (ac.on_ground) snprintf(alt_str, sizeof(alt_str), "GND");
-                else if (ac.altitude >= 18000) snprintf(alt_str, sizeof(alt_str), "FL%d", ac.altitude / 100);
-                else snprintf(alt_str, sizeof(alt_str), "%d'", ac.altitude / 100 * 100);
-
-                // Line 1: callsign
-                {
+                // === CONDENSED ZONE: Flight ID + Alt/Speed only (Type was
+                // never shown here even before this toggle system existed)
+                int line_y = sy - 7;
+                if (tag_id_shown()) {
                     char top[36];
-                    strlcpy(top, cs, sizeof(top));
+                    strlcpy(top, id_text, sizeof(top));
                     lv_draw_label_dsc_t lbl;
                     lv_draw_label_dsc_init(&lbl);
                     lbl.color = color;
                     lbl.font = &lv_font_montserrat_14;
                     lbl.opa = lbl_opa;
                     lbl.text = top;
-                    lv_area_t la1 = {(lv_coord_t)(sx + 8), (lv_coord_t)(sy - 7),
-                                      (lv_coord_t)(sx + 200), (lv_coord_t)(sy + 7)};
+                    lv_area_t la1 = {(lv_coord_t)(sx + 8), (lv_coord_t)line_y,
+                                      (lv_coord_t)(sx + 200), (lv_coord_t)(line_y + 14)};
                     lv_draw_label(layer, &lbl, &la1);
+                    line_y += 14;
                 }
 
-                // Line 2: alt + speed (dimmer)
-                char info[24];
-                snprintf(info, sizeof(info), "%s %dkt", alt_str, ac.speed);
-                lv_draw_label_dsc_t il;
-                lv_draw_label_dsc_init(&il);
-                il.color = color;
-                il.font = &lv_font_montserrat_14;
-                il.opa = (uint8_t)(lbl_opa * 3 / 4);
-                il.text = info;
-                lv_area_t la2 = {(lv_coord_t)(sx + 8), (lv_coord_t)(sy + 7),
-                                  (lv_coord_t)(sx + 160), (lv_coord_t)(sy + 21)};
-                lv_draw_label(layer, &il, &la2);
+                if (tag_data_shown()) {
+                    char alt_str[12];
+                    if (ac.on_ground) snprintf(alt_str, sizeof(alt_str), "GND");
+                    else if (ac.altitude >= 18000) snprintf(alt_str, sizeof(alt_str), "FL%d", ac.altitude / 100);
+                    else snprintf(alt_str, sizeof(alt_str), "%d'", ac.altitude / 100 * 100);
+                    char info[24];
+                    snprintf(info, sizeof(info), "%s %dkt", alt_str, ac.speed);
+                    lv_draw_label_dsc_t il;
+                    lv_draw_label_dsc_init(&il);
+                    il.color = color;
+                    il.font = &lv_font_montserrat_14;
+                    il.opa = (uint8_t)(lbl_opa * 3 / 4);
+                    il.text = info;
+                    lv_area_t la2 = {(lv_coord_t)(sx + 8), (lv_coord_t)line_y,
+                                      (lv_coord_t)(sx + 160), (lv_coord_t)(line_y + 14)};
+                    lv_draw_label(layer, &il, &la2);
+                }
             }
         }
     }
@@ -646,12 +639,17 @@ static void draw_filter_label(lv_layer_t *layer) {
 static void radar_draw_cb(lv_event_t *e) {
     lv_layer_t *layer = lv_event_get_layer(e);
     draw_rings(layer);
-    draw_radar_home_marker(layer);
-    draw_radar_home_reference_elsewhere(layer);
+    // Secondary locations -- other airports + HOME-elsewhere marker.
+    // Off gives the "just dots" look (VIEW menu, view_menu.cpp) -- the
+    // motivating case for this toggle in the first place.
+    if (secondary_locations_shown()) {
+        draw_radar_home_marker(layer);
+        draw_radar_home_reference_elsewhere(layer);
 #if HAS_AIRPORTS_DB
-    draw_radar_static_airport_glyphs(layer);
+        draw_radar_static_airport_glyphs(layer);
 #endif
-    draw_radar_saved_airports(layer);
+        draw_radar_saved_airports(layer);
+    }
     draw_sweep(layer);
     draw_blips(layer);
     draw_filter_label(layer);
