@@ -21,6 +21,7 @@
 #include "ui/radar_view.h"
 #include "ui/arrivals_view.h"
 #include "ui/filters.h"
+#include "ui/geo.h"
 #include "data/storage.h"
 #include "data/error_log.h"
 #include "data/enrichment.h"
@@ -207,9 +208,33 @@ void setup() {
         settings_show();
     }
 
-    // Periodic status bar update — count matches what's drawn on the map
+    // Periodic status bar update -- aircraft count computed directly here
+    // (opacity/filter/hide_ground/radius, matching what a view would draw)
+    // rather than sourced from any one view's own drawn-count cache.
+    // map_view_drawn_count() used to be the source, but it only updated
+    // when Map's own canvas actually rendered a frame -- if resume-on-boot
+    // (see views_resume_last_view()) lands on Radar/Arrivals/Stats, Map
+    // might never draw at all, leaving the count stuck at 0 until the user
+    // visits Map once (reported on hardware).
     lv_timer_create([](lv_timer_t *timer) {
-        status_bar_update(fetcher_wifi_connected(), map_view_drawn_count(), fetcher_last_update());
+        int count = 0;
+        AircraftList *list = locations_active_list(&aircraft_list);
+        float center_lat, center_lon;
+        locations_get_active_coords(&center_lat, &center_lon, nullptr);
+        float radius_nm = range_get_nm();
+        if (list->lock(pdMS_TO_TICKS(5))) {
+            uint32_t now = millis();
+            for (int i = 0; i < list->count; i++) {
+                Aircraft &ac = list->aircraft[i];
+                if (compute_aircraft_opacity(ac.stale_since, now) == 0) continue;
+                if (!aircraft_passes_filter(ac)) continue;
+                if (g_config.hide_ground && ac.on_ground) continue;
+                if (MapProjection::distance_nm(center_lat, center_lon, ac.lat, ac.lon) > radius_nm) continue;
+                count++;
+            }
+            list->unlock();
+        }
+        status_bar_update(fetcher_wifi_connected(), count, fetcher_last_update());
     }, 1000, nullptr);
 
     Serial.println("LVGL initialized - UI ready");
