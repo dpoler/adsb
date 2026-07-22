@@ -180,11 +180,22 @@ static void overlay_update() {
     }
 }
 
-static void overlay_create(lv_obj_t *parent) {
+static void overlay_create() {
     int ow = 320, oh = 200;
-    _overlay = lv_obj_create(parent);
+    // Parented to the screen instead of the Map tile -- this reflects real
+    // boot/connect state (fetcher_connection_type(), fetch counts, errors),
+    // which matters regardless of which view resume-on-boot lands on. It
+    // used to be Map-tile-only, invisible for however long connecting took
+    // if starting on another tab (reported after the view-resume feature
+    // made booting into a non-Map tab possible for the first time).
+    // overlay_update() already runs continuously off Map's own timer
+    // regardless of the active tab, so only where this widget lives needed
+    // to change, not when it refreshes. +STATUS_BAR_HEIGHT keeps it
+    // centered in the same content area as before, just screen-relative
+    // instead of tile-relative.
+    _overlay = lv_obj_create(lv_screen_active());
     lv_obj_set_size(_overlay, ow, oh);
-    lv_obj_set_pos(_overlay, (CANVAS_W - ow) / 2, (CANVAS_H - oh) / 2);
+    lv_obj_set_pos(_overlay, (CANVAS_W - ow) / 2, STATUS_BAR_HEIGHT + (CANVAS_H - oh) / 2);
     lv_obj_set_style_bg_color(_overlay, lv_color_hex(0x0a0a1a), 0);
     lv_obj_set_style_bg_opa(_overlay, LV_OPA_90, 0);
     lv_obj_set_style_border_color(_overlay, lv_color_hex(0x4488ff), 0);
@@ -1059,7 +1070,7 @@ void map_view_init(lv_obj_t *parent, AircraftList *list) {
     // sync.
 
     // Loading overlay — shown until first aircraft data arrives
-    overlay_create(parent);
+    overlay_create();
 
     // Periodic refresh — skip when touch active to prioritize gestures
     static unsigned _last_synced_filter = ~0u; // impossible bitmask value, forces sync on first tick

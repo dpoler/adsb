@@ -174,10 +174,6 @@ void setup() {
     alerts_init(screen);
     Serial.println("alerts OK");
 
-    // Must come after detail_card_init()/alerts_init() -- switching tiles
-    // here can synchronously fire a callback that touches both.
-    views_resume_last_view();
-
     Serial.println("settings_init...");
     settings_init(screen);
     Serial.println("settings OK");
@@ -225,6 +221,18 @@ void setup() {
     enrichment_init();
     fetcher_init(&aircraft_list);
     // tile_cache_init(); // disabled: lv_draw_image broken on ESP32-P4 PPA
+
+    // Must come after fetcher_init() -- resuming into Arrivals synchronously
+    // calls arrivals_view_on_show() -> update_board(), which (for a saved,
+    // non-Home location) reaches for fetcher_location_list()'s AircraftList.
+    // That list's internal mutex is only created inside fetcher_init()'s
+    // _loc_list.init() call; calling this any earlier hit a null semaphore
+    // (assert failed: xQueueSemaphoreTake, confirmed on hardware). Map/Radar
+    // don't have this problem since their periodic redraw timers can't fire
+    // until loop() starts pumping lv_timer_handler(), by which point setup()
+    // has already fully completed -- only Arrivals does synchronous work
+    // immediately on "show".
+    views_resume_last_view();
 }
 
 void loop() {
