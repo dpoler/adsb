@@ -5,6 +5,21 @@
 #include "../data/storage.h"
 #include <cstdlib>
 
+// ============================================================
+// DEACTIVATED (2026-07-23) -- kept in place for a later redesign, not
+// deleted. This board's JD9165 panel is a MIPI-DSI TFT LCD (see
+// hal/jd9165_lcd.cpp), not OLED -- the burn-in-avoidance motivation behind
+// the moving-text screensaver below doesn't actually apply to this
+// hardware (TFT LCDs have no per-pixel emissive aging the way OLED does;
+// the closest LCD analog, temporary "image persistence," needs weeks of a
+// static image and fades on its own). Brightness/dim/blank may still be
+// worth keeping without the screensaver motion, but the whole feature is
+// being rethought, so everything below is disabled rather than picked
+// apart. The two public entry points at the bottom of this file are now
+// no-ops, so main.cpp doesn't need to change at all.
+// ============================================================
+#if 0
+
 #define COLOR_PANEL  lv_color_hex(0x14142a)
 #define COLOR_ACCENT lv_color_hex(0x00cc66)
 #define COLOR_TEXT   lv_color_hex(0xccccdd)
@@ -318,8 +333,12 @@ void screensaver_show_settings() {
     }, LV_EVENT_VALUE_CHANGED, nullptr);
 }
 
-void screensaver_init(lv_obj_t *screen, backlight_set_fn set_backlight) {
-    _set_backlight = set_backlight;
-    build_display_overlay(screen);
-    lv_timer_create(state_timer_cb, 200, nullptr);
+#endif // DEACTIVATED
+
+void screensaver_init(lv_obj_t *, backlight_set_fn) {
+    // Deactivated -- see the #if 0 block above.
+}
+
+void screensaver_show_settings() {
+    // Deactivated -- see the #if 0 block above.
 }

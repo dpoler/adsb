@@ -305,10 +305,10 @@ void settings_init(lv_obj_t *parent) {
     // right-edge filter column (map/radar/arrivals), same control as this
     // used to be, just not buried in Settings anymore.
 
-    // Display / Screensaver -- brightness, dim/blank idle timeouts, and the
-    // moving aircraft-count screensaver all live in their own popover
-    // (screensaver.cpp) rather than crammed in here; this gap between
-    // Auto-Cycle and the airportdb token field is otherwise empty.
+    // Display / Screensaver button -- deactivated 2026-07-23 along with the
+    // rest of screensaver.cpp (see the #if 0 block there for why). Left
+    // commented out rather than deleted so it's a one-step re-enable.
+#if 0
     lv_obj_t *display_btn = lv_button_create(_panel);
     lv_obj_set_size(display_btn, FIELD_W, 40);
     lv_obj_set_pos(display_btn, rx, 240);
@@ -324,6 +324,7 @@ void settings_init(lv_obj_t *parent) {
     lv_obj_add_event_cb(display_btn, [](lv_event_t *e) {
         screensaver_show_settings();
     }, LV_EVENT_CLICKED, nullptr);
+#endif
 
     // airportdb.io token — used by the location picker's "Add airport" flow
     create_label(_panel, "Airport DB Token (airportdb.io)", rx, 364);
