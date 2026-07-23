@@ -28,6 +28,17 @@ struct UserConfig {
 
     int trail_style;         // 0=line, 1=dots -- unused (dead field, kept for NVS layout compat)
 
+    // Display sleep / brightness / screensaver (screensaver.cpp) -- all
+    // idle timers count from LVGL's own input-activity clock
+    // (lv_display_get_inactive_time()), not a custom touch tracker.
+    int display_brightness_pct;   // 10-100, backlight level when active/normal (default 100)
+    int display_dim_after_min;    // idle minutes before dimming; 0 = never dim (default 0)
+    int display_blank_after_min;  // idle minutes before blank/screensaver; 0 = never (default 0)
+    bool screensaver_enabled;     // show the moving aircraft-count screensaver instead of a
+                                   // plain backlight-off blank once display_blank_after_min hits
+    bool screensaver_drift;       // true = drift continuously around the screen, false = jump
+                                   // to a new position every 20s
+
     // Display filters -- FILT_* bitmask and GND, indexed by VIEW_MAP/
     // VIEW_RADAR/VIEW_ARRIVALS (views.h; VIEW_STATS unused -- no filter
     // column there). Map/Radar/List (Arrivals) each remember their own

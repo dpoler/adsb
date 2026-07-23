@@ -9,6 +9,7 @@
 
 static lv_obj_t *wifi_icon;
 static lv_obj_t *ac_count_label;
+static int _last_aircraft_count = 0;
 static lv_obj_t *update_label;
 static lv_obj_t *nav_btns[NUM_VIEWS];
 static lv_obj_t *nav_labels[NUM_VIEWS];
@@ -194,6 +195,7 @@ void status_bar_update(bool wifi_connected, int aircraft_count, uint32_t last_up
     }
 
     // Aircraft count
+    _last_aircraft_count = aircraft_count;
     lv_label_set_text_fmt(ac_count_label, "%d AC", aircraft_count);
 
     // Last update
@@ -244,6 +246,10 @@ void status_bar_set_active_dot(int view_index) {
 
 int status_bar_get_view_chip_x() {
     return lv_obj_get_x(view_chip);
+}
+
+int status_bar_get_aircraft_count() {
+    return _last_aircraft_count;
 }
 
 void status_bar_set_auto_indicator(bool visible) {

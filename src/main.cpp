@@ -21,6 +21,7 @@
 #include "ui/radar_view.h"
 #include "ui/arrivals_view.h"
 #include "ui/filters.h"
+#include "ui/screensaver.h"
 #include "ui/geo.h"
 #include "data/storage.h"
 #include "data/error_log.h"
@@ -53,6 +54,13 @@ static bool flush_ready_cb(esp_lcd_panel_handle_t panel,
     esp_lcd_dpi_panel_event_data_t *edata, void *user_ctx) {
     lv_display_flush_ready((lv_display_t *)user_ctx);
     return false;
+}
+
+// Backlight level setter -- kept as a plain function so screensaver.cpp can
+// drive the PWM level without needing the file-scope `lcd` instance exposed
+// outside this file.
+static void set_backlight(int percent) {
+    lcd.example_bsp_set_lcd_backlight((uint32_t)percent);
 }
 
 // Touch read callback
@@ -138,6 +146,10 @@ void setup() {
     // Load config before UI so views init with the correct range
     g_config = storage_load_config();
     locations_init();
+
+    // lcd.begin() (above) turned the backlight on at a hardcoded 100% before
+    // g_config existed -- apply the user's saved level now.
+    set_backlight(g_config.display_brightness_pct);
 
     // Create UI — LVGL must be fully set up before background tasks
     lv_obj_t *screen = lv_screen_active();
@@ -245,6 +257,11 @@ void setup() {
     enrichment_init();
     fetcher_init(&aircraft_list);
     // tile_cache_init(); // disabled: lv_draw_image broken on ESP32-P4 PPA
+
+    // Built last so its overlay (lv_obj_move_foreground() inside) sits above
+    // every other popover/panel created above, whichever happens to be open
+    // when the idle timeout fires.
+    screensaver_init(screen, set_backlight);
 
     // Must come after fetcher_init() -- resuming into Arrivals synchronously
     // calls arrivals_view_on_show() -> update_board(), which (for a saved,

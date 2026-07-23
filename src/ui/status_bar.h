@@ -19,6 +19,10 @@ lv_obj_t *status_bar_create(lv_obj_t *parent);
 // Update status bar with current data
 void status_bar_update(bool wifi_connected, int aircraft_count, uint32_t last_update_ms);
 
+// Last aircraft_count passed to status_bar_update() -- reused by the
+// screensaver (screensaver.cpp) instead of recomputing its own count.
+int status_bar_get_aircraft_count();
+
 // Update the active view dot indicator
 void status_bar_set_active_dot(int view_index);
 

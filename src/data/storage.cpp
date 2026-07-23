@@ -30,6 +30,11 @@ UserConfig storage_load_config() {
     cfg.cycle_interval_s = 15;
     cfg.cycle_inactivity_s = 60;
     cfg.trail_style = 0;
+    cfg.display_brightness_pct = 100;
+    cfg.display_dim_after_min = 0;   // never dim
+    cfg.display_blank_after_min = 0; // never blank
+    cfg.screensaver_enabled = false;
+    cfg.screensaver_drift = true;
     for (int i = 0; i < 4; i++) {
         cfg.view_filter_mask[i] = 0;  // no filters active
         cfg.view_hide_ground[i] = false;
@@ -71,6 +76,11 @@ UserConfig storage_load_config() {
     cfg.cycle_interval_s = _prefs.getInt("cyc_int", cfg.cycle_interval_s);
     cfg.cycle_inactivity_s = _prefs.getInt("cyc_idle", cfg.cycle_inactivity_s);
     cfg.trail_style = _prefs.getInt("trail_sty", cfg.trail_style);
+    cfg.display_brightness_pct = _prefs.getInt("disp_bright", cfg.display_brightness_pct);
+    cfg.display_dim_after_min = _prefs.getInt("disp_dimmin", cfg.display_dim_after_min);
+    cfg.display_blank_after_min = _prefs.getInt("disp_blkmin", cfg.display_blank_after_min);
+    cfg.screensaver_enabled = _prefs.getBool("ss_enabled", cfg.screensaver_enabled);
+    cfg.screensaver_drift = _prefs.getBool("ss_drift", cfg.screensaver_drift);
     for (int i = 0; i < 4; i++) {
         char key[12];
         snprintf(key, sizeof(key), "filt_m%d", i);
@@ -122,6 +132,11 @@ void storage_save_config(const UserConfig &cfg) {
     _prefs.putInt("cyc_int", cfg.cycle_interval_s);
     _prefs.putInt("cyc_idle", cfg.cycle_inactivity_s);
     _prefs.putInt("trail_sty", cfg.trail_style);
+    _prefs.putInt("disp_bright", cfg.display_brightness_pct);
+    _prefs.putInt("disp_dimmin", cfg.display_dim_after_min);
+    _prefs.putInt("disp_blkmin", cfg.display_blank_after_min);
+    _prefs.putBool("ss_enabled", cfg.screensaver_enabled);
+    _prefs.putBool("ss_drift", cfg.screensaver_drift);
     for (int i = 0; i < 4; i++) {
         char key[12];
         snprintf(key, sizeof(key), "filt_m%d", i);

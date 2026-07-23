@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include "settings.h"
+#include "screensaver.h"
 #include "../pins_config.h"
 #include "../data/storage.h"
 #include <cstdio>
@@ -303,6 +304,26 @@ void settings_init(lv_obj_t *parent) {
     // Hide ground aircraft -- moved to a quick-access GND button in the
     // right-edge filter column (map/radar/arrivals), same control as this
     // used to be, just not buried in Settings anymore.
+
+    // Display / Screensaver -- brightness, dim/blank idle timeouts, and the
+    // moving aircraft-count screensaver all live in their own popover
+    // (screensaver.cpp) rather than crammed in here; this gap between
+    // Auto-Cycle and the airportdb token field is otherwise empty.
+    lv_obj_t *display_btn = lv_button_create(_panel);
+    lv_obj_set_size(display_btn, FIELD_W, 40);
+    lv_obj_set_pos(display_btn, rx, 240);
+    lv_obj_set_style_bg_color(display_btn, lv_color_hex(0x1a1a3a), 0);
+    lv_obj_set_style_border_color(display_btn, lv_color_hex(0x333366), 0);
+    lv_obj_set_style_border_width(display_btn, 1, 0);
+    lv_obj_set_style_radius(display_btn, 6, 0);
+    { lv_obj_t *lbl = lv_label_create(display_btn);
+      lv_label_set_text(lbl, "Display / Screensaver...");
+      lv_obj_set_style_text_color(lbl, lv_color_hex(0xccccdd), 0);
+      lv_obj_set_style_text_font(lbl, &lv_font_montserrat_14, 0);
+      lv_obj_center(lbl); }
+    lv_obj_add_event_cb(display_btn, [](lv_event_t *e) {
+        screensaver_show_settings();
+    }, LV_EVENT_CLICKED, nullptr);
 
     // airportdb.io token — used by the location picker's "Add airport" flow
     create_label(_panel, "Airport DB Token (airportdb.io)", rx, 364);
