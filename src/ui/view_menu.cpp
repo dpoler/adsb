@@ -52,77 +52,32 @@ static void section_header(lv_obj_t *parent, const char *text, int y) {
     lv_obj_set_pos(lbl, 0, y);
 }
 
-#define SW_W 44
-#define SW_H 22
-#define SW_KNOB_D 18
-#define SW_PAD 2
-
-// Moves the knob + recolors the track to look like an actual toggle switch
-// (oval track, circular knob sliding side to side) -- same visual language
-// as Settings' real lv_switch controls, even though this is built from
-// plain lv_obj_create() objects, not lv_switch (see toggle_row() for why).
-static void set_switch_state(lv_obj_t *track, bool on) {
-    lv_obj_t *knob = lv_obj_get_child(track, 0);
-    if (on) {
-        lv_obj_set_style_bg_color(track, COLOR_ACCENT, 0);
-        lv_obj_set_pos(knob, SW_W - SW_KNOB_D - SW_PAD, SW_PAD);
-    } else {
-        lv_obj_set_style_bg_color(track, lv_color_hex(0x333366), 0);
-        lv_obj_set_pos(knob, SW_PAD, SW_PAD);
-    }
-}
-
 // Shared row builder for every plain on/off toggle in this popover (tags,
 // secondary locations, and trails' own on/off) -- label on the left, a
-// switch-styled control on the right, same look/spacing throughout.
-// Deliberately NOT an lv_switch: every other toggle in this app (GND
-// button, filter buttons, nav tabs) is a plain clickable object +
-// LV_EVENT_CLICKED -- lv_switch was the one place using
-// LV_EVENT_VALUE_CHANGED instead, and was reported unusable (didn't
-// respond to taps). The whole row is clickable, not just the switch
-// track, for a bigger/easier hit target -- cb receives the track as its
-// user_data so it can update it after toggling.
+// real lv_switch on the right, matching Settings' own switches exactly
+// (create_switch() in settings.cpp) -- same construction, no explicit
+// lv_obj_set_size() call. That call is the one concrete difference this
+// popover's switch ever had from the original trail_menu.cpp version
+// (which was never reported unresponsive, just imperfect at persisting)
+// -- explicitly resizing an lv_switch can desync its internal knob/track
+// layout from its actual hit-testing region, which lines up with "doesn't
+// respond to taps" better than "lv_switch is broken on this hardware"
+// (Settings' switches, sized only by the theme default, work fine).
 static lv_obj_t *toggle_row(lv_obj_t *parent, const char *label, int y,
                              bool initial, lv_event_cb_t cb) {
-    lv_obj_t *row = lv_obj_create(parent);
-    lv_obj_set_size(row, PANEL_W - 20, 30);
-    lv_obj_set_pos(row, 0, y);
-    lv_obj_set_style_bg_opa(row, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_border_width(row, 0, 0);
-    lv_obj_set_style_pad_all(row, 0, 0);
-    lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLL_CHAIN);
-
-    lv_obj_t *lbl = lv_label_create(row);
+    lv_obj_t *lbl = lv_label_create(parent);
     lv_label_set_text(lbl, label);
     lv_obj_set_style_text_font(lbl, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(lbl, COLOR_DIM, 0);
-    lv_obj_set_pos(lbl, 0, 6);
-    lv_obj_clear_flag(lbl, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_set_pos(lbl, 0, y + 4);
 
-    lv_obj_t *track = lv_obj_create(row);
-    lv_obj_set_size(track, SW_W, SW_H);
-    lv_obj_set_pos(track, PANEL_W - 20 - SW_W, 4);
-    lv_obj_set_style_radius(track, SW_H / 2, 0);
-    lv_obj_set_style_border_width(track, 0, 0);
-    lv_obj_set_style_pad_all(track, 0, 0);
-    lv_obj_clear_flag(track, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_clear_flag(track, LV_OBJ_FLAG_CLICKABLE); // row handles the tap, not the track
-
-    lv_obj_t *knob = lv_obj_create(track);
-    lv_obj_set_size(knob, SW_KNOB_D, SW_KNOB_D);
-    lv_obj_set_style_radius(knob, LV_RADIUS_CIRCLE, 0);
-    lv_obj_set_style_bg_color(knob, lv_color_white(), 0);
-    lv_obj_set_style_bg_opa(knob, LV_OPA_COVER, 0);
-    lv_obj_set_style_border_width(knob, 0, 0);
-    lv_obj_set_style_pad_all(knob, 0, 0);
-    lv_obj_clear_flag(knob, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_clear_flag(knob, LV_OBJ_FLAG_CLICKABLE);
-
-    set_switch_state(track, initial);
-
-    lv_obj_add_event_cb(row, cb, LV_EVENT_CLICKED, track);
-    return track;
+    lv_obj_t *sw = lv_switch_create(parent);
+    lv_obj_set_pos(sw, PANEL_W - 20 - 46, y);
+    lv_obj_set_style_bg_color(sw, lv_color_hex(0x333366), 0);
+    lv_obj_set_style_bg_color(sw, COLOR_ACCENT, LV_PART_INDICATOR | LV_STATE_CHECKED);
+    if (initial) lv_obj_add_state(sw, LV_STATE_CHECKED);
+    lv_obj_add_event_cb(sw, cb, LV_EVENT_VALUE_CHANGED, nullptr);
+    return sw;
 }
 
 static void open_overlay() {
@@ -170,9 +125,8 @@ static void open_overlay() {
     section_header(_panel, "TRAILS", 0);
 
     toggle_row(_panel, "Show trails", 26, g_config.trails_enabled, [](lv_event_t *e) {
-        g_config.trails_enabled = !g_config.trails_enabled;
+        g_config.trails_enabled = lv_obj_has_state(lv_event_get_target_obj(e), LV_STATE_CHECKED);
         storage_save_config(g_config);
-        set_switch_state((lv_obj_t *)lv_event_get_user_data(e), g_config.trails_enabled);
     });
 
     // "Trail Amount" -- not "Length" or a "pts" count, since the effective
@@ -259,15 +213,12 @@ static void open_overlay() {
     section_header(_panel, "TAGS", 160);
     toggle_row(_panel, "Flight ID", 188, tag_id_shown(), [](lv_event_t *e) {
         tag_id_toggle();
-        set_switch_state((lv_obj_t *)lv_event_get_user_data(e), tag_id_shown());
     });
     toggle_row(_panel, "Alt / Speed", 222, tag_data_shown(), [](lv_event_t *e) {
         tag_data_toggle();
-        set_switch_state((lv_obj_t *)lv_event_get_user_data(e), tag_data_shown());
     });
     toggle_row(_panel, "Type", 256, tag_type_shown(), [](lv_event_t *e) {
         tag_type_toggle();
-        set_switch_state((lv_obj_t *)lv_event_get_user_data(e), tag_type_shown());
     });
 
     // ============================================================
@@ -277,7 +228,6 @@ static void open_overlay() {
     section_header(_panel, "LOCATIONS", 290);
     toggle_row(_panel, "Other Airports", 318, secondary_locations_shown(), [](lv_event_t *e) {
         secondary_locations_toggle();
-        set_switch_state((lv_obj_t *)lv_event_get_user_data(e), secondary_locations_shown());
     });
 }
 
