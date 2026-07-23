@@ -1,7 +1,8 @@
 #include "filters.h"
 #include "aircraft_icons.h" // classify_icon() -- reused below for FILT_GA
+#include "views.h" // views_filterable_index() -- Map/Radar/Arrivals each get an independent filter mask
 #include "../data/locations.h" // locations_get_active_coords() -- reused below for FILT_VERT's AGL check
-#include "../data/storage.h" // g_config.last_filter_mask -- resume-on-boot persistence
+#include "../data/storage.h" // g_config.view_filter_mask -- per-view persistence
 #include <cstring>
 #include <cstdio>
 
@@ -14,31 +15,30 @@ const FilterDef filter_defs[NUM_FILTERS] = {
     {"VERT", "ASCENDING/DESCENDING", lv_color_hex(0x669999)},
 };
 
-static unsigned _active_mask = 0;
-
-void filters_init() {
-    // Mask off any stray high bits from a stale/corrupt NVS value rather
-    // than trusting it outright.
-    _active_mask = g_config.last_filter_mask & ((1u << NUM_FILTERS) - 1);
+// Masks off any stray high bits from a stale/corrupt NVS value rather than
+// trusting it outright.
+static unsigned current_mask() {
+    return g_config.view_filter_mask[views_filterable_index()] & ((1u << NUM_FILTERS) - 1);
 }
 
-unsigned filter_get_active() { return _active_mask; }
+unsigned filter_get_active() { return current_mask(); }
 
 void filter_toggle(int idx) {
-    _active_mask ^= (1u << idx);
+    int v = views_filterable_index();
+    g_config.view_filter_mask[v] ^= (1u << idx);
     // Every call site is a discrete button tap (never a high-frequency path
     // like a slider drag), so persisting immediately is safe -- see the
     // trail-length slider's cyan-flash fix for why that distinction matters.
-    g_config.last_filter_mask = _active_mask;
     storage_save_config(g_config);
 }
 
 int filter_label_text(char *buf, size_t buf_size, lv_color_t *color) {
+    unsigned mask = current_mask();
     if (buf_size) buf[0] = '\0';
     size_t pos = 0;
     int count = 0;
     for (int i = 0; i < NUM_FILTERS; i++) {
-        if (!(_active_mask & (1u << i))) continue;
+        if (!(mask & (1u << i))) continue;
         if (count == 0 && color) *color = filter_defs[i].color;
         const char *sep = (count == 0) ? "FILTER: " : " + ";
         int n = snprintf(buf + pos, pos < buf_size ? buf_size - pos : 0,
@@ -133,8 +133,9 @@ static bool passes_state_filters(const Aircraft &ac, unsigned bits) {
 }
 
 bool aircraft_passes_filter(const Aircraft &ac) {
-    unsigned category_bits = _active_mask & FILTER_CATEGORY_MASK;
-    unsigned state_bits = _active_mask & FILTER_STATE_MASK;
+    unsigned mask = current_mask();
+    unsigned category_bits = mask & FILTER_CATEGORY_MASK;
+    unsigned state_bits = mask & FILTER_STATE_MASK;
 
     if (category_bits && !passes_category_filters(ac, category_bits)) return false;
     if (state_bits && !passes_state_filters(ac, state_bits)) return false;

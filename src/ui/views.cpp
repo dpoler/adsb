@@ -147,6 +147,11 @@ int views_get_active_index() {
     return _active_index;
 }
 
+int views_filterable_index() {
+    return (_active_index == VIEW_MAP || _active_index == VIEW_RADAR ||
+            _active_index == VIEW_ARRIVALS) ? _active_index : VIEW_MAP;
+}
+
 lv_obj_t *views_get_tileview() {
     return tileview;
 }

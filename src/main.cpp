@@ -138,7 +138,6 @@ void setup() {
     // Load config before UI so views init with the correct range
     g_config = storage_load_config();
     locations_init();
-    filters_init();
 
     // Create UI — LVGL must be fully set up before background tasks
     lv_obj_t *screen = lv_screen_active();
@@ -228,7 +227,7 @@ void setup() {
                 Aircraft &ac = list->aircraft[i];
                 if (compute_aircraft_opacity(ac.stale_since, now) == 0) continue;
                 if (!aircraft_passes_filter(ac)) continue;
-                if (g_config.hide_ground && ac.on_ground) continue;
+                if (g_config.view_hide_ground[views_filterable_index()] && ac.on_ground) continue;
                 if (MapProjection::distance_nm(center_lat, center_lon, ac.lat, ac.lon) > radius_nm) continue;
                 count++;
             }

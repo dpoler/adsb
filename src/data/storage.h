@@ -28,8 +28,20 @@ struct UserConfig {
 
     int trail_style;         // 0=line, 1=dots -- unused (dead field, kept for NVS layout compat)
 
-    // Display filters
-    bool hide_ground;          // don't show aircraft with on_ground flag set
+    // Display filters -- FILT_* bitmask and GND, indexed by VIEW_MAP/
+    // VIEW_RADAR/VIEW_ARRIVALS (views.h; VIEW_STATS unused -- no filter
+    // column there). Map/Radar/List (Arrivals) each remember their own
+    // filter selection and GND state independently. GND is a separate
+    // unconditional exclude, not part of the FILT_* bitmask (see
+    // filters.h) -- kept per-view alongside it since the two are
+    // mutually-exclusive partners (map_view.cpp etc.) and leaving GND
+    // global while VERT went per-view would reopen the exact
+    // cross-view-leak bug already fixed for the VIEW menu below.
+    // filters.cpp/each view file resolve which slot to use themselves
+    // (filters.cpp via views_filterable_index(); each view file already
+    // knows its own VIEW_* constant, no resolution needed).
+    unsigned view_filter_mask[4];   // FILT_* bitmask (filters.h)
+    bool view_hide_ground[4];       // GND quick-toggle
 
     // VIEW menu -- Map and Radar each get independent settings, indexed by
     // VIEW_MAP/VIEW_RADAR (views.h; 0/1 -- Arrivals/Stats have no VIEW chip
@@ -59,7 +71,6 @@ struct UserConfig {
     int last_view_idx;              // VIEW_MAP/VIEW_RADAR/VIEW_ARRIVALS/VIEW_STATS (views.h)
     int last_range_idx;             // index into range.cpp's levels, 0 = widest
     char last_location_icao[8];     // matches LOC_ICAO_LEN (locations.h); "" = Home
-    unsigned last_filter_mask;      // FILT_* bitmask (filters.h)
 };
 
 // Load config from NVS. Returns defaults if not found.

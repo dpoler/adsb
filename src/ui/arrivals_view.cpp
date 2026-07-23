@@ -17,7 +17,7 @@ static AircraftList *_list = nullptr;      // currently effective list
 static AircraftList *_home_list = nullptr; // the list passed in at init
 static lv_obj_t *_board_container = nullptr;
 static lv_obj_t *_filter_btns[NUM_FILTERS] = {};
-// GND is a quick-access toggle for g_config.hide_ground -- not part of the
+// GND is a quick-access toggle for g_config.view_hide_ground[VIEW_ARRIVALS] -- not part of the
 // FILT_* bitmask (unconditional exclude, not an OR/AND-able category or
 // state match), but drawn in the same button stack, state group with VERT.
 static lv_obj_t *_gnd_btn = nullptr;
@@ -225,7 +225,7 @@ static void update_gnd_visual() {
     // Lit = ground traffic currently SHOWN, matching every other filter
     // button's convention (lit = "you're seeing more of this"), not the
     // hide_ground boolean's own sense directly.
-    if (!g_config.hide_ground) {
+    if (!g_config.view_hide_ground[VIEW_ARRIVALS]) {
         lv_obj_set_style_bg_color(_gnd_btn, COLOR_GND, 0);
         lv_obj_set_style_bg_opa(_gnd_btn, LV_OPA_COVER, 0);
         lv_obj_set_style_border_color(_gnd_btn, lv_color_hex(0xffffff), 0);
@@ -244,13 +244,13 @@ static void update_gnd_visual() {
 
 static void gnd_click_cb(lv_event_t *e) {
     _filter_just_clicked = true;
-    g_config.hide_ground = !g_config.hide_ground;
+    g_config.view_hide_ground[VIEW_ARRIVALS] = !g_config.view_hide_ground[VIEW_ARRIVALS];
     storage_save_config(g_config);
     update_gnd_visual();
 
     // Reverse direction -- see map_view.cpp's gnd_click_cb for the full
     // rationale.
-    if (!g_config.hide_ground && (filter_get_active() & (1u << FILT_VERT))) {
+    if (!g_config.view_hide_ground[VIEW_ARRIVALS] && (filter_get_active() & (1u << FILT_VERT))) {
         filter_toggle(FILT_VERT);
         update_filter_visuals();
     }
@@ -262,14 +262,14 @@ static void update_board(lv_timer_t *t) {
 
     // Sync filter button visuals if filter changed from another view
     static unsigned _last_synced_filter = ~0u; // impossible bitmask value, forces sync on first tick
-    static bool _last_synced_gnd = g_config.hide_ground;
+    static bool _last_synced_gnd = g_config.view_hide_ground[VIEW_ARRIVALS];
     unsigned af = filter_get_active();
     if (af != _last_synced_filter) {
         _last_synced_filter = af;
         update_filter_visuals();
     }
-    if (g_config.hide_ground != _last_synced_gnd) {
-        _last_synced_gnd = g_config.hide_ground;
+    if (g_config.view_hide_ground[VIEW_ARRIVALS] != _last_synced_gnd) {
+        _last_synced_gnd = g_config.view_hide_ground[VIEW_ARRIVALS];
         update_gnd_visual();
     }
 
@@ -288,7 +288,7 @@ static void update_board(lv_timer_t *t) {
     for (int i = 0; i < _list->count && n_entries < MAX_AIRCRAFT; i++) {
         Aircraft &ac = _list->aircraft[i];
         if (ac.lat == 0 && ac.lon == 0) continue;
-        if (g_config.hide_ground && ac.on_ground) continue;
+        if (g_config.view_hide_ground[VIEW_ARRIVALS] && ac.on_ground) continue;
         if (!aircraft_passes_filter(ac)) continue;
         float d = MapProjection::distance_nm(center_lat, center_lon, ac.lat, ac.lon);
         if (d > range_get_nm()) continue;
@@ -397,8 +397,8 @@ static void filter_click_cb(lv_event_t *e) {
 
     // VERT and GND are mutually exclusive -- see map_view.cpp's
     // filter_click_cb for the full rationale.
-    if (idx == FILT_VERT && (filter_get_active() & (1u << FILT_VERT)) && !g_config.hide_ground) {
-        g_config.hide_ground = true;
+    if (idx == FILT_VERT && (filter_get_active() & (1u << FILT_VERT)) && !g_config.view_hide_ground[VIEW_ARRIVALS]) {
+        g_config.view_hide_ground[VIEW_ARRIVALS] = true;
         storage_save_config(g_config);
         update_gnd_visual();
     }
@@ -609,7 +609,7 @@ void arrivals_view_init(lv_obj_t *parent, AircraftList *list) {
         }
         update_filter_visuals();
 
-        // GND -- quick toggle for g_config.hide_ground, same state group as
+        // GND -- quick toggle for g_config.view_hide_ground[VIEW_ARRIVALS], same state group as
         // VERT (see map_view.cpp's copy of this block for the full rationale)
         int y = btn_y0 + NUM_FILTERS * (btn_h + btn_gap) + group_gap_extra;
         _gnd_btn = lv_obj_create(parent);

@@ -22,15 +22,15 @@ struct FilterDef {
 // Shared filter definitions (no per-view LVGL pointers — views manage their own buttons)
 extern const FilterDef filter_defs[NUM_FILTERS];
 
-// Restores the active-filter bitmask from g_config.last_filter_mask (resume
-// on boot). Call once at startup, before any view reads filter_get_active().
-void filters_init();
-
-// Global active filter state (bitmask, persists across view switches). Any
-// number of filters can be active at once -- an aircraft passes if it
-// matches ANY active filter (OR); with none active, everything passes.
+// Active filter state (bitmask) for whichever of Map/Radar/Arrivals(List)
+// is currently active -- each remembers its own selection independently
+// (g_config.view_filter_mask, storage.h; resolved via
+// views_filterable_index(), views.h). Any number of filters can be active
+// at once -- an aircraft passes if it matches ANY active filter (OR); with
+// none active, everything passes. No init step needed -- g_config is
+// already loaded from NVS by the time anything calls these.
 unsigned filter_get_active();       // bitmask, e.g. (1u<<FILT_GA)|(1u<<FILT_HELI)
-void     filter_toggle(int idx);    // flips bit idx -- persists to g_config.last_filter_mask
+void     filter_toggle(int idx);    // flips bit idx for the active view, persists immediately
 
 // Builds "FILTER: X" / "FILTER: X + Y" for whichever filters are currently
 // active into buf, and sets *color to the first active filter's color (a

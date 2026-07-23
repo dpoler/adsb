@@ -81,7 +81,7 @@ static char _tracked_hex[7] = {};
 // Per-view button/label pointers for filter buttons
 static lv_obj_t *_filter_btns[NUM_FILTERS] = {};
 static lv_obj_t *_filter_lbls[NUM_FILTERS] = {};
-// GND is a quick-access toggle for g_config.hide_ground -- not part of the
+// GND is a quick-access toggle for g_config.view_hide_ground[VIEW_MAP] -- not part of the
 // FILT_* bitmask (it's an unconditional exclude, not an OR/AND-able category
 // or state match like the others), but drawn in the same button stack, in
 // the state group with VERT.
@@ -289,8 +289,8 @@ static void filter_click_cb(lv_event_t *e) {
     // show ground traffic while VERT is active is a standing contradiction.
     // Enabling VERT switches GND off automatically. Same logic in
     // radar_view.cpp/arrivals_view.cpp.
-    if (idx == FILT_VERT && (filter_get_active() & (1u << FILT_VERT)) && !g_config.hide_ground) {
-        g_config.hide_ground = true;
+    if (idx == FILT_VERT && (filter_get_active() & (1u << FILT_VERT)) && !g_config.view_hide_ground[VIEW_MAP]) {
+        g_config.view_hide_ground[VIEW_MAP] = true;
         storage_save_config(g_config);
         update_gnd_visual();
     }
@@ -303,7 +303,7 @@ static void update_gnd_visual() {
     // Lit = ground traffic currently SHOWN, matching every other filter
     // button's convention (lit = "you're seeing more of this"), not the
     // hide_ground boolean's own sense directly.
-    if (!g_config.hide_ground) {
+    if (!g_config.view_hide_ground[VIEW_MAP]) {
         lv_obj_set_style_bg_color(_gnd_btn, COLOR_GND, 0);
         lv_obj_set_style_bg_opa(_gnd_btn, LV_OPA_COVER, 0);
         lv_obj_set_style_border_color(_gnd_btn, lv_color_hex(0xffffff), 0);
@@ -323,14 +323,14 @@ static void update_gnd_visual() {
 
 static void gnd_click_cb(lv_event_t *e) {
     _filter_just_clicked = true; // prevent zoom cycle
-    g_config.hide_ground = !g_config.hide_ground;
+    g_config.view_hide_ground[VIEW_MAP] = !g_config.view_hide_ground[VIEW_MAP];
     storage_save_config(g_config);
     update_gnd_visual();
 
     // Reverse direction of the mutual exclusion above: turning GND on (now
     // showing ground traffic) while VERT is active would immediately be
     // contradicted by VERT hiding all ground traffic anyway.
-    if (!g_config.hide_ground && (filter_get_active() & (1u << FILT_VERT))) {
+    if (!g_config.view_hide_ground[VIEW_MAP] && (filter_get_active() & (1u << FILT_VERT))) {
         filter_toggle(FILT_VERT);
         update_filter_visuals();
     }
@@ -646,7 +646,7 @@ static void draw_aircraft(lv_layer_t *layer) {
         uint8_t ac_opa = compute_aircraft_opacity(ac.stale_since, now);
         if (ac_opa == 0) continue;
         if (!aircraft_passes_filter(ac)) continue;
-        if (g_config.hide_ground && ac.on_ground) continue;
+        if (g_config.view_hide_ground[VIEW_MAP] && ac.on_ground) continue;
 
         int sx, sy;
         if (!_proj.to_screen(ac.lat, ac.lon, sx, sy)) continue;
@@ -1004,7 +1004,7 @@ void map_view_init(lv_obj_t *parent, AircraftList *list) {
         if (!_list->lock(pdMS_TO_TICKS(10))) return;
         for (int i = 0; i < _list->count; i++) {
             if (!aircraft_passes_filter(_list->aircraft[i])) continue;
-            if (g_config.hide_ground && _list->aircraft[i].on_ground) continue;
+            if (g_config.view_hide_ground[VIEW_MAP] && _list->aircraft[i].on_ground) continue;
             int sx, sy;
             if (_proj.to_screen(_list->aircraft[i].lat, _list->aircraft[i].lon, sx, sy)) {
                 int dx = tx - sx;
@@ -1075,7 +1075,7 @@ void map_view_init(lv_obj_t *parent, AircraftList *list) {
         _filter_lbls[i] = lbl;
     }
 
-    // GND -- quick toggle for g_config.hide_ground, appended right after
+    // GND -- quick toggle for g_config.view_hide_ground[VIEW_MAP], appended right after
     // VERT in the same state group (no new divider -- it narrows regardless
     // of category the same way VERT does, just isn't part of the FILT_*
     // bitmask since it's an unconditional exclude rather than an OR/AND
@@ -1108,7 +1108,7 @@ void map_view_init(lv_obj_t *parent, AircraftList *list) {
 
     // Periodic refresh — skip when touch active to prioritize gestures
     static unsigned _last_synced_filter = ~0u; // impossible bitmask value, forces sync on first tick
-    static bool _last_synced_gnd = g_config.hide_ground;
+    static bool _last_synced_gnd = g_config.view_hide_ground[VIEW_MAP];
     static float _last_range = -1;
     lv_timer_create([](lv_timer_t *t) {
         // Sync filter button visuals if filter changed from another view
@@ -1117,8 +1117,8 @@ void map_view_init(lv_obj_t *parent, AircraftList *list) {
             _last_synced_filter = af;
             update_filter_visuals();
         }
-        if (g_config.hide_ground != _last_synced_gnd) {
-            _last_synced_gnd = g_config.hide_ground;
+        if (g_config.view_hide_ground[VIEW_MAP] != _last_synced_gnd) {
+            _last_synced_gnd = g_config.view_hide_ground[VIEW_MAP];
             update_gnd_visual();
         }
 

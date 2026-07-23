@@ -19,6 +19,13 @@ lv_obj_t *views_get_tile(int view_index);
 // Get the currently active tile index
 int views_get_active_index();
 
+// Resolves the active view to one of VIEW_MAP/VIEW_RADAR/VIEW_ARRIVALS --
+// falls back to VIEW_MAP if Stats is active (no filter column, no GND
+// button there) or the index is otherwise out of range. Shared by any
+// per-view setting that Map/Radar/Arrivals(List) each keep independently
+// (filters.cpp's FILT_* bitmask + GND; see storage.h).
+int views_filterable_index();
+
 // Get the tileview object (for view cycling)
 lv_obj_t *views_get_tileview();
 

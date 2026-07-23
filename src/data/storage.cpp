@@ -1,6 +1,7 @@
 #include "storage.h"
 #include <Preferences.h>
 #include <cstring>
+#include <cstdio>
 
 UserConfig g_config = {};
 static Preferences _prefs;
@@ -29,7 +30,10 @@ UserConfig storage_load_config() {
     cfg.cycle_interval_s = 15;
     cfg.cycle_inactivity_s = 60;
     cfg.trail_style = 0;
-    cfg.hide_ground = false;
+    for (int i = 0; i < 4; i++) {
+        cfg.view_filter_mask[i] = 0;  // no filters active
+        cfg.view_hide_ground[i] = false;
+    }
     for (int i = 0; i < 2; i++) {
         cfg.view_trails_enabled[i] = true;
         cfg.view_trail_max_points[i] = 30;
@@ -41,7 +45,6 @@ UserConfig storage_load_config() {
     cfg.last_view_idx = 0;   // VIEW_MAP
     cfg.last_range_idx = 0;  // widest preset
     cfg.last_location_icao[0] = '\0'; // Home
-    cfg.last_filter_mask = 0; // no filters active
 
     _prefs.begin("adsb", true); // read-only
 
@@ -68,7 +71,13 @@ UserConfig storage_load_config() {
     cfg.cycle_interval_s = _prefs.getInt("cyc_int", cfg.cycle_interval_s);
     cfg.cycle_inactivity_s = _prefs.getInt("cyc_idle", cfg.cycle_inactivity_s);
     cfg.trail_style = _prefs.getInt("trail_sty", cfg.trail_style);
-    cfg.hide_ground = _prefs.getBool("hide_gnd", cfg.hide_ground);
+    for (int i = 0; i < 4; i++) {
+        char key[12];
+        snprintf(key, sizeof(key), "filt_m%d", i);
+        cfg.view_filter_mask[i] = _prefs.getUInt(key, cfg.view_filter_mask[i]);
+        snprintf(key, sizeof(key), "hide_gnd%d", i);
+        cfg.view_hide_ground[i] = _prefs.getBool(key, cfg.view_hide_ground[i]);
+    }
     cfg.view_trails_enabled[0] = _prefs.getBool("trail_on0", cfg.view_trails_enabled[0]);
     cfg.view_trails_enabled[1] = _prefs.getBool("trail_on1", cfg.view_trails_enabled[1]);
     cfg.view_trail_max_points[0] = _prefs.getInt("trail_pts0", cfg.view_trail_max_points[0]);
@@ -85,7 +94,6 @@ UserConfig storage_load_config() {
     cfg.last_range_idx = _prefs.getInt("last_rng", cfg.last_range_idx);
     if (_prefs.isKey("last_loc"))
         strlcpy(cfg.last_location_icao, _prefs.getString("last_loc", cfg.last_location_icao).c_str(), sizeof(cfg.last_location_icao));
-    cfg.last_filter_mask = _prefs.getUInt("last_filt", cfg.last_filter_mask);
 
     _prefs.end();
     Serial.println("Storage: config loaded from NVS");
@@ -114,7 +122,13 @@ void storage_save_config(const UserConfig &cfg) {
     _prefs.putInt("cyc_int", cfg.cycle_interval_s);
     _prefs.putInt("cyc_idle", cfg.cycle_inactivity_s);
     _prefs.putInt("trail_sty", cfg.trail_style);
-    _prefs.putBool("hide_gnd", cfg.hide_ground);
+    for (int i = 0; i < 4; i++) {
+        char key[12];
+        snprintf(key, sizeof(key), "filt_m%d", i);
+        _prefs.putUInt(key, cfg.view_filter_mask[i]);
+        snprintf(key, sizeof(key), "hide_gnd%d", i);
+        _prefs.putBool(key, cfg.view_hide_ground[i]);
+    }
     _prefs.putBool("trail_on0", cfg.view_trails_enabled[0]);
     _prefs.putBool("trail_on1", cfg.view_trails_enabled[1]);
     _prefs.putInt("trail_pts0", cfg.view_trail_max_points[0]);
@@ -130,7 +144,6 @@ void storage_save_config(const UserConfig &cfg) {
     _prefs.putInt("last_view", cfg.last_view_idx);
     _prefs.putInt("last_rng", cfg.last_range_idx);
     _prefs.putString("last_loc", cfg.last_location_icao);
-    _prefs.putUInt("last_filt", cfg.last_filter_mask);
 
     _prefs.end();
     Serial.println("Storage: config saved to NVS");
