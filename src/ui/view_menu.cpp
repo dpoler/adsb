@@ -25,11 +25,11 @@ static lv_obj_t *_len_label = nullptr;
 static void close_overlay() {
     if (_overlay) {
         // Guaranteed flush -- a backstop for whatever the in-memory
-        // g_config.trails_enabled/trail_max_points ended up as, regardless
-        // of whether every individual widget-level save fired (this is
-        // what fixed trail settings not surviving a reboot). Closing the
-        // popover is a single discrete event, not a hot path, so an extra
-        // write here is cheap.
+        // g_config.view_trails_enabled/view_trail_max_points ended up as,
+        // regardless of whether every individual widget-level save fired
+        // (this is what fixed trail settings not surviving a reboot).
+        // Closing the popover is a single discrete event, not a hot path,
+        // so an extra write here is cheap.
         storage_save_config(g_config);
 
         // Same hide-then-delete-async pattern as location_picker.cpp -- this
@@ -124,9 +124,9 @@ static void open_overlay() {
     // ============================================================
     section_header(_panel, "TRAILS", 0);
 
-    toggle_row(_panel, "Show trails", 26, g_config.trails_enabled, [](lv_event_t *e) {
-        g_config.trails_enabled = lv_obj_has_state(lv_event_get_target_obj(e), LV_STATE_CHECKED);
-        storage_save_config(g_config);
+    toggle_row(_panel, "Show trails", 26, trails_shown(), [](lv_event_t *e) {
+        if (lv_obj_has_state(lv_event_get_target_obj(e), LV_STATE_CHECKED) != trails_shown())
+            trails_toggle();
     });
 
     // "Trail Amount" -- not "Length" or a "pts" count, since the effective
@@ -142,7 +142,7 @@ static void open_overlay() {
     lv_obj_set_pos(len_lbl, 0, 62);
 
     _len_label = lv_label_create(_panel);
-    lv_label_set_text_fmt(_len_label, "%d/60", g_config.trail_max_points);
+    lv_label_set_text_fmt(_len_label, "%d/60", trails_amount());
     lv_obj_set_style_text_color(_len_label, lv_color_white(), 0);
     lv_obj_set_style_text_font(_len_label, &lv_font_montserrat_14, 0);
     lv_obj_set_pos(_len_label, PANEL_W - 20 - 50, 62);
@@ -151,7 +151,7 @@ static void open_overlay() {
     lv_obj_set_size(slider, PANEL_W - 20, 10);
     lv_obj_set_pos(slider, 0, 86);
     lv_slider_set_range(slider, 10, 60);
-    lv_slider_set_value(slider, g_config.trail_max_points, LV_ANIM_OFF);
+    lv_slider_set_value(slider, trails_amount(), LV_ANIM_OFF);
     lv_obj_set_style_bg_color(slider, lv_color_hex(0x333366), 0);
     lv_obj_set_style_bg_color(slider, COLOR_ACCENT, LV_PART_INDICATOR);
     lv_obj_set_style_bg_color(slider, COLOR_ACCENT, LV_PART_KNOB);
@@ -162,7 +162,7 @@ static void open_overlay() {
     // enough to cause a visible flash (see project_backlog memory).
     lv_obj_add_event_cb(slider, [](lv_event_t *e) {
         int val = lv_slider_get_value(lv_event_get_target_obj(e));
-        g_config.trail_max_points = val;
+        trails_amount_set(val);
         lv_label_set_text_fmt(_len_label, "%d/60", val);
     }, LV_EVENT_VALUE_CHANGED, nullptr);
     lv_obj_add_event_cb(slider, [](lv_event_t *e) {

@@ -28,14 +28,16 @@ UserConfig storage_load_config() {
     cfg.cycle_enabled = true;
     cfg.cycle_interval_s = 15;
     cfg.cycle_inactivity_s = 60;
-    cfg.trails_enabled = true;
-    cfg.trail_max_points = 30;
     cfg.trail_style = 0;
     cfg.hide_ground = false;
-    cfg.show_tag_id = true;
-    cfg.show_tag_data = false;
-    cfg.show_tag_type = false;
-    cfg.show_secondary_locations = true;
+    for (int i = 0; i < 2; i++) {
+        cfg.view_trails_enabled[i] = true;
+        cfg.view_trail_max_points[i] = 30;
+        cfg.view_show_tag_id[i] = true;
+        cfg.view_show_tag_data[i] = false;
+        cfg.view_show_tag_type[i] = false;
+        cfg.view_show_secondary_locations[i] = true;
+    }
     cfg.last_view_idx = 0;   // VIEW_MAP
     cfg.last_range_idx = 0;  // widest preset
     cfg.last_location_icao[0] = '\0'; // Home
@@ -65,14 +67,20 @@ UserConfig storage_load_config() {
     cfg.cycle_enabled = _prefs.getBool("cyc_on", cfg.cycle_enabled);
     cfg.cycle_interval_s = _prefs.getInt("cyc_int", cfg.cycle_interval_s);
     cfg.cycle_inactivity_s = _prefs.getInt("cyc_idle", cfg.cycle_inactivity_s);
-    cfg.trails_enabled = _prefs.getBool("trail_on", cfg.trails_enabled);
-    cfg.trail_max_points = _prefs.getInt("trail_pts", cfg.trail_max_points);
     cfg.trail_style = _prefs.getInt("trail_sty", cfg.trail_style);
     cfg.hide_ground = _prefs.getBool("hide_gnd", cfg.hide_ground);
-    cfg.show_tag_id = _prefs.getBool("tag_id", cfg.show_tag_id);
-    cfg.show_tag_data = _prefs.getBool("tag_data", cfg.show_tag_data);
-    cfg.show_tag_type = _prefs.getBool("tag_type", cfg.show_tag_type);
-    cfg.show_secondary_locations = _prefs.getBool("show_2nd_loc", cfg.show_secondary_locations);
+    cfg.view_trails_enabled[0] = _prefs.getBool("trail_on0", cfg.view_trails_enabled[0]);
+    cfg.view_trails_enabled[1] = _prefs.getBool("trail_on1", cfg.view_trails_enabled[1]);
+    cfg.view_trail_max_points[0] = _prefs.getInt("trail_pts0", cfg.view_trail_max_points[0]);
+    cfg.view_trail_max_points[1] = _prefs.getInt("trail_pts1", cfg.view_trail_max_points[1]);
+    cfg.view_show_tag_id[0] = _prefs.getBool("tag_id0", cfg.view_show_tag_id[0]);
+    cfg.view_show_tag_id[1] = _prefs.getBool("tag_id1", cfg.view_show_tag_id[1]);
+    cfg.view_show_tag_data[0] = _prefs.getBool("tag_data0", cfg.view_show_tag_data[0]);
+    cfg.view_show_tag_data[1] = _prefs.getBool("tag_data1", cfg.view_show_tag_data[1]);
+    cfg.view_show_tag_type[0] = _prefs.getBool("tag_type0", cfg.view_show_tag_type[0]);
+    cfg.view_show_tag_type[1] = _prefs.getBool("tag_type1", cfg.view_show_tag_type[1]);
+    cfg.view_show_secondary_locations[0] = _prefs.getBool("show2loc0", cfg.view_show_secondary_locations[0]);
+    cfg.view_show_secondary_locations[1] = _prefs.getBool("show2loc1", cfg.view_show_secondary_locations[1]);
     cfg.last_view_idx = _prefs.getInt("last_view", cfg.last_view_idx);
     cfg.last_range_idx = _prefs.getInt("last_rng", cfg.last_range_idx);
     if (_prefs.isKey("last_loc"))
@@ -105,14 +113,20 @@ void storage_save_config(const UserConfig &cfg) {
     _prefs.putBool("cyc_on", cfg.cycle_enabled);
     _prefs.putInt("cyc_int", cfg.cycle_interval_s);
     _prefs.putInt("cyc_idle", cfg.cycle_inactivity_s);
-    _prefs.putBool("trail_on", cfg.trails_enabled);
-    _prefs.putInt("trail_pts", cfg.trail_max_points);
     _prefs.putInt("trail_sty", cfg.trail_style);
     _prefs.putBool("hide_gnd", cfg.hide_ground);
-    _prefs.putBool("tag_id", cfg.show_tag_id);
-    _prefs.putBool("tag_data", cfg.show_tag_data);
-    _prefs.putBool("tag_type", cfg.show_tag_type);
-    _prefs.putBool("show_2nd_loc", cfg.show_secondary_locations);
+    _prefs.putBool("trail_on0", cfg.view_trails_enabled[0]);
+    _prefs.putBool("trail_on1", cfg.view_trails_enabled[1]);
+    _prefs.putInt("trail_pts0", cfg.view_trail_max_points[0]);
+    _prefs.putInt("trail_pts1", cfg.view_trail_max_points[1]);
+    _prefs.putBool("tag_id0", cfg.view_show_tag_id[0]);
+    _prefs.putBool("tag_id1", cfg.view_show_tag_id[1]);
+    _prefs.putBool("tag_data0", cfg.view_show_tag_data[0]);
+    _prefs.putBool("tag_data1", cfg.view_show_tag_data[1]);
+    _prefs.putBool("tag_type0", cfg.view_show_tag_type[0]);
+    _prefs.putBool("tag_type1", cfg.view_show_tag_type[1]);
+    _prefs.putBool("show2loc0", cfg.view_show_secondary_locations[0]);
+    _prefs.putBool("show2loc1", cfg.view_show_secondary_locations[1]);
     _prefs.putInt("last_view", cfg.last_view_idx);
     _prefs.putInt("last_rng", cfg.last_range_idx);
     _prefs.putString("last_loc", cfg.last_location_icao);

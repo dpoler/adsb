@@ -1,12 +1,21 @@
 #pragma once
 
-// Per-field tag toggles and secondary-location visibility for Map/Radar,
-// controlled by the status bar's VIEW menu (view_menu.cpp). Live here
-// rather than in filters.h since none of this hides aircraft -- it's what
-// gets drawn next to (or around) them. Persisted in g_config (storage.h)
-// -- every toggle here is a single discrete tap, so an immediate NVS
-// write on each call is safe (same reasoning as filter_toggle() in
-// filters.cpp).
+// Per-view (Map vs Radar) trail and tag-field visibility, controlled by
+// the status bar's VIEW menu (view_menu.cpp). Each accessor resolves
+// which of Map/Radar it applies to via views_get_active_index()
+// internally -- every caller (map_view.cpp/radar_view.cpp's own draw
+// loops, or the VIEW popover while it's open) is only ever asking on
+// behalf of whichever view is currently active. Persisted per-view in
+// g_config (storage.h) -- toggles/switch taps are a single discrete
+// action, so an immediate NVS write on each is safe (same reasoning as
+// filter_toggle() in filters.cpp); trails_amount_set() is the exception,
+// matching the trail-length slider's drag-vs-commit split (the caller
+// persists explicitly on release, not on every drag tick).
+
+bool trails_shown();
+void trails_toggle();
+int trails_amount();
+void trails_amount_set(int val);
 
 // Flight number, falling back to registration then ICAO hex if no
 // callsign -- never shows registration alongside an existing callsign.

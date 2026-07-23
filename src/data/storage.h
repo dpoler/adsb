@@ -26,25 +26,30 @@ struct UserConfig {
     bool alert_military;     // show popup for military aircraft
     bool alert_emergency;    // show popup for squawk 7500/7600/7700
 
-    // Trail settings
-    bool trails_enabled;
-    int trail_max_points;    // 10-60 (default 30)
-    int trail_style;         // 0=line, 1=dots
+    int trail_style;         // 0=line, 1=dots -- unused (dead field, kept for NVS layout compat)
 
     // Display filters
     bool hide_ground;          // don't show aircraft with on_ground flag set
 
-    // VIEW menu -- Map/Radar per-field tag toggles and secondary-location
-    // visibility (view_menu.cpp). show_tag_id defaults true (matches the
-    // callsign label both views always showed before this existed);
-    // show_tag_data/show_tag_type default false (new capability -- Map
-    // never showed this before, stay minimal until turned on);
+    // VIEW menu -- Map and Radar each get independent settings, indexed by
+    // VIEW_MAP/VIEW_RADAR (views.h; 0/1 -- Arrivals/Stats have no VIEW chip
+    // at all). Without this, switching views while the VIEW popover was
+    // still open would leak one view's settings into the other (reported).
+    // display_prefs.cpp's accessors resolve which slot to use via
+    // views_get_active_index() -- callers never index these directly.
+    // trails_enabled defaults true and trail_max_points 30 (both views,
+    // matching pre-per-view behavior); show_tag_id defaults true (matches
+    // the callsign label both views always showed before any of this
+    // existed); show_tag_data/show_tag_type default false (new capability
+    // -- Map never showed this before, stay minimal until turned on);
     // show_secondary_locations defaults true (matches the airport/HOME
     // markers always being drawn before this existed).
-    bool show_tag_id;          // flight number, falling back to registration then ICAO hex
-    bool show_tag_data;        // altitude + speed + climb/descend arrow
-    bool show_tag_type;        // aircraft type / operator
-    bool show_secondary_locations; // other saved/static airports + HOME-elsewhere marker
+    bool view_trails_enabled[2];
+    int view_trail_max_points[2];      // 10-60 (default 30)
+    bool view_show_tag_id[2];          // flight number, falling back to registration then ICAO hex
+    bool view_show_tag_data[2];        // altitude + speed + climb/descend arrow
+    bool view_show_tag_type[2];        // aircraft type / operator
+    bool view_show_secondary_locations[2]; // other saved/static airports + HOME-elsewhere marker
 
     // Resume-on-boot state -- all written from discrete, human-paced actions
     // (nav tap, range chip tap, location picker selection, filter button

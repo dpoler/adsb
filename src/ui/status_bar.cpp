@@ -210,6 +210,16 @@ void status_bar_set_gear_callback(lv_event_cb_t cb) {
 }
 
 void status_bar_set_active_dot(int view_index) {
+    // The VIEW popover displays/edits whichever of Map/Radar was active
+    // when it opened, and per-view settings mean Map and Radar can now
+    // genuinely differ (reported: switching views while it's still open
+    // left it silently writing to the newly-active view's settings while
+    // still showing the one you switched away from's). This is the one
+    // choke point every view change already passes through -- manual nav
+    // tap, swipe, and the auto-cycle timer alike -- so closing here covers
+    // all of them without touching each call site individually.
+    view_menu_close();
+
     for (int i = 0; i < NUM_VIEWS; i++) {
         bool active = (i == view_index);
         lv_obj_set_style_bg_color(nav_btns[i],
