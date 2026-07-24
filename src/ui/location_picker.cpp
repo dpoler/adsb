@@ -164,6 +164,15 @@ static void drag_handle_event_cb(lv_event_t *e) {
         lv_point_t p;
         lv_indev_get_point(lv_indev_active(), &p);
         _drag_start_y = p.y;
+
+        // Without this, LVGL's own scroll handling grabs the same vertical
+        // drag for _panel (the nearest scrollable ancestor of the handle)
+        // at the same time this handler is repositioning the row -- the two
+        // fought each other (reported as the list scrolling instead of the
+        // row moving). No need to restore it afterward: build_list_view()
+        // unconditionally rebuilds _panel from scratch on release, which
+        // comes back scrollable by default.
+        lv_obj_clear_flag(_panel, LV_OBJ_FLAG_SCROLLABLE);
         return;
     }
 
@@ -217,16 +226,13 @@ static void build_list_view() {
     _add_fetch_btn = nullptr;
     _add_ta = nullptr;
 
+    // Sized exactly to content (Home + saved + "Add") -- no minimum floor.
+    // A prior pass added one to avoid a "tiny box" look with few entries, but
+    // that just left dead space below the last row -- exact-fit-until-the-
+    // screen-runs-out is what was actually wanted.
     int rows = 1 + locations_count() + 1; // Home + saved + "Add" row
     int max_h = LCD_V_RES - STATUS_BAR_HEIGHT - 16; // as tall as the screen allows below the status bar
-    // Reported as looking too short with just a couple of entries -- grows
-    // with content same as before, but no longer sized exactly to it; a
-    // generous floor keeps it from looking like a tiny box floating over the
-    // dimmed backdrop, and it only actually scrolls once rows*ROW_H genuinely
-    // exceeds max_h (so many saved airports there's no screen space left).
-    int min_h = 340;
     int panel_h = rows * ROW_H + 8;
-    if (panel_h < min_h) panel_h = min_h;
     if (panel_h > max_h) panel_h = max_h;
 
     _panel = lv_obj_create(_overlay);
