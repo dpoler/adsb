@@ -64,12 +64,22 @@ static bool wifi_connect_with_timeout(uint32_t timeout_ms) {
     while (WiFi.status() != WL_CONNECTED) {
         if (millis() - start > timeout_ms) {
             wl_status_t s = WiFi.status();
+            // WL_CONNECT_FAILED does NOT mean "wrong password" specifically --
+            // it's the generic auth/handshake-failed status, and empirically
+            // fires reliably on the very first connect attempt right after a
+            // fresh C6 reset, then succeeds on the next attempt seconds later
+            // with the same unchanged credentials. Mislabeling it "wrong
+            // password" sent a wrong signal here once already -- don't repeat
+            // that. A *persistent* WL_CONNECT_FAILED across retries is still
+            // worth checking the password for; a single one right after reset
+            // isn't evidence of that on its own.
             const char *reason =
                 s == WL_NO_SSID_AVAIL  ? "SSID not found" :
-                s == WL_CONNECT_FAILED ? "wrong password" :
+                s == WL_CONNECT_FAILED ? "auth/handshake failed (often transient right after a C6 reset)" :
                 s == WL_CONNECTION_LOST? "connection lost" :
-                s == WL_DISCONNECTED   ? "disconnected (bad pw or DHCP?)" : "unknown";
-            Serial.printf("\nWiFi timeout (status %d: %s)\n", s, reason);
+                s == WL_DISCONNECTED   ? "disconnected (bad pw, DHCP, or AP out of range?)" : "unknown";
+            Serial.printf("\nWiFi timeout after %lums (status %d: %s)\n",
+                (unsigned long)(millis() - start), s, reason);
             return false;
         }
         vTaskDelay(pdMS_TO_TICKS(500));
@@ -484,6 +494,11 @@ static void location_fetch_poll() {
                     if (!err) {
                         parse_aircraft_json(doc, &_loc_list, false);
                         _loc_stats.fetch_ok++;
+                        // Matches the main loop's "Fetched N ac" success line --
+                        // this poller previously logged failures only, so a
+                        // healthy location poll left no serial trace at all to
+                        // confirm it was ever actually running.
+                        Serial.printf("[LocPoll] Fetched %d ac\n", _loc_list.count);
                     } else {
                         _loc_stats.fetch_fail++;
                         error_log_add("LocPoll JSON: %s (%uB/%dB)", err.c_str(), total, content_len);
@@ -515,6 +530,7 @@ static void location_fetch_poll() {
             }
             _loc_next_fetch = millis() + backoff_ms;
             _loc_stats.fetch_fail++;
+            error_log_add("LocPoll HTTP 429, backing off %lus", (unsigned long)(backoff_ms / 1000));
             Serial.printf("[LocPoll] HTTP 429 (rate limited) -- backing off %lus\n",
                 (unsigned long)(backoff_ms / 1000));
         } else {

@@ -1,5 +1,6 @@
 #include "airlines.h"
 #include "http_mutex.h"
+#include "error_log.h"
 #include <Arduino.h>
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
@@ -100,6 +101,11 @@ bool airlines_load() {
 
     http.end();
     http_mutex_release();
+    // One-shot boot-time load -- a failure here has a real, persistent effect
+    // (every airline lookup falls back to raw ICAO codes for the rest of this
+    // session) but was previously Serial-only, so there was no way to notice
+    // it happened without a USB serial connection.
+    if (!ok) error_log_add("Airlines load failed (HTTP %d)", code);
     return ok;
 }
 
