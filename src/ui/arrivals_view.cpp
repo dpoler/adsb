@@ -33,7 +33,10 @@ static bool _filter_just_clicked = false; // suppress the row-tap handler right 
 #define TITLE_H 30
 #define COL_HEADER_H 18
 #define HEADER_H (TITLE_H + COL_HEADER_H)
-#define MAX_ROWS 16
+// Was 16 -- the tileview's own horizontal scrollbar ("swipe bar") runs
+// right along the bottom edge and was overlapping/cutting off the last
+// row (reported). One fewer row keeps the whole table clear of it.
+#define MAX_ROWS 15
 
 // Sort modes
 enum SortMode {

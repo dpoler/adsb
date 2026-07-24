@@ -802,14 +802,13 @@ static void draw_aircraft(lv_layer_t *layer) {
 }
 
 // Shared legend geometry -- fixed, measured local-y positions (see
-// project backlog: "bullseye/legend centering") in the gap below the
-// bullseye's own bottom edge (MAP_PROJ_H = 562) and the measured swipe-bar
-// position (~598).
+// project backlog: "bullseye/legend centering"), shifted up 4px from the
+// first measured pass since the swipe bar was still overlapping it.
 #define LEGEND_X0 4
 #define LEGEND_W  248
-#define LEGEND_ICON_Y 566
-#define LEGEND_ALT_Y  584
-#define LEGEND_BOTTOM 598
+#define LEGEND_ICON_Y 562
+#define LEGEND_ALT_Y  580
+#define LEGEND_BOTTOM 594
 
 // Solid backdrop behind both legend rows. Without this, an airport/runway
 // label (or an aircraft tag) that happens to render underneath reads as
