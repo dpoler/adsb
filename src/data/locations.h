@@ -53,6 +53,12 @@ bool locations_add_result(bool *ok, char *err, size_t err_size);
 
 void locations_remove(int idx);
 
+// Moves the location at `from` to position `to`, shifting everything between
+// them by one slot (same semantics as a list drag-to-reorder). No-op if
+// either index is out of range or they're equal. The active selection (if
+// any) is remapped to keep pointing at the same airport, not the same slot.
+void locations_reorder(int from, int to);
+
 // Currently selected location. -1 = Home.
 int locations_active_index();
 void locations_set_active(int idx);

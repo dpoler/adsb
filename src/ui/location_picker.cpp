@@ -131,6 +131,18 @@ static void remove_row_click_cb(lv_event_t *e) {
     build_list_view(); // rebuild panel in place
 }
 
+static void move_up_click_cb(lv_event_t *e) {
+    int idx = (int)(intptr_t)lv_event_get_user_data(e);
+    locations_reorder(idx, idx - 1);
+    build_list_view(); // rebuild panel in place -- same pattern as remove_row_click_cb
+}
+
+static void move_down_click_cb(lv_event_t *e) {
+    int idx = (int)(intptr_t)lv_event_get_user_data(e);
+    locations_reorder(idx, idx + 1);
+    build_list_view();
+}
+
 // Note: build_list_view()/build_add_view() are also called from click events
 // on a widget that is a *descendant* of _panel (e.g. remove_row_click_cb, the
 // "Add airport" row, the add-view's "Cancel" button) -- deleting _panel
@@ -220,6 +232,28 @@ static void build_list_view() {
         lv_obj_add_flag(rm, LV_OBJ_FLAG_CLICKABLE);
         lv_obj_set_ext_click_area(rm, 10);
         lv_obj_add_event_cb(rm, remove_row_click_cb, LV_EVENT_CLICKED, (void *)(intptr_t)i);
+
+        // Reorder -- only shown where it's a valid move (no "up" on the
+        // first saved row, no "down" on the last), same insertion-order
+        // array locations_reorder() operates on.
+        if (i > 0) {
+            lv_obj_t *up = lv_label_create(row);
+            lv_label_set_text(up, LV_SYMBOL_UP);
+            lv_obj_set_style_text_color(up, COLOR_DIM, 0);
+            lv_obj_align(up, LV_ALIGN_RIGHT_MID, -60, 0);
+            lv_obj_add_flag(up, LV_OBJ_FLAG_CLICKABLE);
+            lv_obj_set_ext_click_area(up, 8);
+            lv_obj_add_event_cb(up, move_up_click_cb, LV_EVENT_CLICKED, (void *)(intptr_t)i);
+        }
+        if (i < n - 1) {
+            lv_obj_t *down = lv_label_create(row);
+            lv_label_set_text(down, LV_SYMBOL_DOWN);
+            lv_obj_set_style_text_color(down, COLOR_DIM, 0);
+            lv_obj_align(down, LV_ALIGN_RIGHT_MID, -34, 0);
+            lv_obj_add_flag(down, LV_OBJ_FLAG_CLICKABLE);
+            lv_obj_set_ext_click_area(down, 8);
+            lv_obj_add_event_cb(down, move_down_click_cb, LV_EVENT_CLICKED, (void *)(intptr_t)i);
+        }
     }
 
     // Add row

@@ -199,6 +199,32 @@ void locations_remove(int idx) {
     save_all();
 }
 
+void locations_reorder(int from, int to) {
+    if (from < 0 || from >= _count || to < 0 || to >= _count || from == to) return;
+
+    Location moved = _locations[from];
+    if (from < to) {
+        for (int i = from; i < to; i++) _locations[i] = _locations[i + 1];
+    } else {
+        for (int i = from; i > to; i--) _locations[i] = _locations[i - 1];
+    }
+    _locations[to] = moved;
+
+    // The active selection (if it was one of the affected slots) needs to
+    // keep pointing at the same airport it did before the shift, not the
+    // same array index -- same reasoning as locations_remove()'s own index
+    // bookkeeping below.
+    if (_active_index == from) {
+        _active_index = to;
+    } else if (from < to && _active_index > from && _active_index <= to) {
+        _active_index--;
+    } else if (from > to && _active_index >= to && _active_index < from) {
+        _active_index++;
+    }
+
+    save_all();
+}
+
 int locations_active_index() {
     return _active_index;
 }
