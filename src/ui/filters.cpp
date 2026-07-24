@@ -28,6 +28,16 @@ unsigned filter_get_active() { return current_mask(); }
 void filter_toggle(int idx) {
     int v = views_filterable_index();
     g_config.view_filter_mask[v] ^= (1u << idx);
+
+    // HIGH and LOW describe the same altitude band and can't both be true of
+    // one aircraft -- turning one on turns the other off, same mutual
+    // exclusion as VERT/GND (though that pair spans two separate config
+    // fields and three duplicated view files; both bits here already live in
+    // the same mask, so it's one check in one place instead).
+    unsigned &mask = g_config.view_filter_mask[v];
+    if (idx == FILT_HIGH && (mask & (1u << FILT_HIGH))) mask &= ~(1u << FILT_LOW);
+    else if (idx == FILT_LOW && (mask & (1u << FILT_LOW))) mask &= ~(1u << FILT_HIGH);
+
     // Every call site is a discrete button tap (never a high-frequency path
     // like a slider drag), so persisting immediately is safe -- see the
     // trail-length slider's cyan-flash fix for why that distinction matters.
@@ -74,18 +84,18 @@ bool is_heli_type(const char *t) {
     return false;
 }
 
-// Filters fall into two independent groups, combined AND-across/OR-within:
-// matching ANY active filter within a group is enough for that group, but
-// a group with no active filters passes automatically -- and both groups
-// must pass. This is what makes e.g. COM+VERT mean "commercial traffic
-// that's ALSO ascending/descending" rather than "commercial traffic OR
-// ascending/descending traffic" -- COM/MIL/EMG/HELI/GA are alternative
-// *categories* (picking several means "show any of these categories"),
-// while VERT/HIGH/LOW are orthogonal *states* a category filter should
-// narrow, not compete with. HIGH+LOW together is a valid (if odd)
-// combination -- it just means "either band", equivalent to no altitude
-// filter at all but explicitly requested, same OR-within-group rule as
-// picking multiple categories.
+// Categories (COM/MIL/EMG/HELI/GA) are alternative classifications of an
+// aircraft -- picking several means "show any of these" (OR-within-group;
+// a group with nothing active passes automatically). States (VERT/HIGH/LOW)
+// are different: each active one is an independent condition an aircraft
+// must ALSO satisfy (AND-across-bits), since they describe orthogonal
+// properties of the SAME aircraft rather than alternatives to pick from --
+// VERT+HIGH means "ascending/descending AND above the altitude band", not
+// "ascending/descending OR high" (which would just be a stranger way of
+// picking two things independently, defeating the point of combining them).
+// HIGH and LOW are mutually exclusive by construction (filter_toggle()) --
+// they describe the same axis (altitude band), so there's never an "OR
+// between them" question to begin with.
 #define FILTER_CATEGORY_MASK \
     ((1u << FILT_AIRLINE) | (1u << FILT_MILITARY) | (1u << FILT_EMERGENCY) | \
      (1u << FILT_HELI) | (1u << FILT_GA))
@@ -119,12 +129,17 @@ static bool passes_category_filters(const Aircraft &ac, unsigned bits) {
     return false;
 }
 
+// Each active bit here is an independent condition the aircraft must ALSO
+// satisfy (AND-across-bits, unlike passes_category_filters()'s OR) -- see
+// the FILTER_STATE_MASK comment above for why. Returns false the moment any
+// active condition fails; true only once every active one has held (with
+// none active, there's nothing to narrow by, so it passes vacuously).
 static bool passes_state_filters(const Aircraft &ac, unsigned bits) {
     int elev_ft = 0;
     locations_get_active_coords(nullptr, nullptr, &elev_ft);
     int32_t agl = ac.altitude - elev_ft;
 
-    if ((bits & (1u << FILT_VERT)) && !ac.on_ground && ac.vert_rate_valid) {
+    if (bits & (1u << FILT_VERT)) {
         // "Landing/departing" traffic, not just anything with a nonzero
         // vertical rate -- a cruise-altitude step-climb would otherwise
         // match too. Same AGL-ceiling approach as dpoler/FlightRadarCYD's
@@ -140,18 +155,20 @@ static bool passes_state_filters(const Aircraft &ac, unsigned bits) {
         // that's genuinely climbing/descending but whose most recent update
         // simply omitted baro_rate would read as "level" and drop out of
         // this filter, even though nothing about its actual flight changed.
-        if (agl <= AGL_BAND_FT && (ac.vert_rate > 300 || ac.vert_rate < -300))
-            return true;
+        if (ac.on_ground || !ac.vert_rate_valid) return false;
+        if (!(agl <= AGL_BAND_FT && (ac.vert_rate > 300 || ac.vert_rate < -300))) return false;
     }
     // HIGH/LOW both exclude ground traffic explicitly -- GND (a separate,
     // unconditional exclude -- see storage.h) already owns "hide aircraft on
     // the ground"; without this, an on-ground aircraft's ~0 AGL would
     // otherwise always match LOW, conflating "low-flying" with "not flying".
-    if ((bits & (1u << FILT_HIGH)) && !ac.on_ground && agl > AGL_BAND_FT)
-        return true;
-    if ((bits & (1u << FILT_LOW)) && !ac.on_ground && agl <= AGL_BAND_FT)
-        return true;
-    return false;
+    if (bits & (1u << FILT_HIGH)) {
+        if (ac.on_ground || !(agl > AGL_BAND_FT)) return false;
+    }
+    if (bits & (1u << FILT_LOW)) {
+        if (ac.on_ground || !(agl <= AGL_BAND_FT)) return false;
+    }
+    return true;
 }
 
 bool aircraft_passes_filter(const Aircraft &ac) {
