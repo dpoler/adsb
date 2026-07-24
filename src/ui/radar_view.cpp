@@ -38,25 +38,32 @@ static uint32_t _trails_cleared_at = 0;
 #define RADAR_W LCD_H_RES
 #define RADAR_H (LCD_V_RES - STATUS_BAR_HEIGHT)
 #define RADAR_CX (RADAR_W / 2)
+// RADAR_H is the canvas *object's* declared height (matches its tile) --
+// kept as-is for the object's own size and the filter-button column, which
+// are real LVGL layout needing the tile's actual bounds. But content drawn
+// via this canvas's custom draw callback turned out NOT to be clipped
+// there in practice -- after two rounds of "no room left" being reported
+// as wrong anyway, the real usable drawing height reaches much closer to
+// the physical panel height (LCD_V_RES) than RADAR_H suggests.
+// RADAR_DRAW_H is that bigger reach. Note this affects aircraft position
+// too, not just the compass -- to_radar_screen() (used for both) derives
+// its scale from RADAR_R/RADAR_CY directly, unlike map_view.cpp where the
+// rings and _proj.screen_h are separate; keeping them unified here is
+// necessary so the rings don't visually lie about where a given range
+// actually plots. Possible side effect worth watching for on hardware:
+// aircraft very near the reclaimed outer edge may render past where
+// LVGL's own touch hit-testing still considers "on the canvas object"
+// (which is still sized to RADAR_H), even though they're visible.
+#define RADAR_DRAW_H (LCD_V_RES - 6)
 // Clearance above the compass rose so its "N" label / outer ring don't touch
 // the status bar directly above the canvas, and a separate (small) clearance
 // below so the outer ring doesn't touch the very bottom edge either.
 // RADAR_CY/RADAR_R are solved so the circle's top edge lands at exactly
-// RADAR_TOP_MARGIN and its bottom edge at exactly RADAR_H - RADAR_BOTTOM_MARGIN
-// -- deliberately NOT the old "shrink by TOP_MARGIN and recenter" approach,
-// which coupled the two: growing TOP_MARGIN there only made the circle
-// smaller around a fixed bottom edge (RADAR_H - 10, always, regardless of
-// TOP_MARGIN) rather than actually reclaiming the unused room below it
-// (reported: bullseye still too close to the status bar despite visible
-// empty space at the bottom of the screen).
-// Reported again as still too close to the top, with clear unused room
-// below. Bumped well past the last (45) pass to actually move the center
-// down, not just nudge it -- costs some radius, since RADAR_R is fixed by
-// the gap between RADAR_TOP_MARGIN and RADAR_H - RADAR_BOTTOM_MARGIN.
+// RADAR_TOP_MARGIN and its bottom edge at exactly RADAR_DRAW_H - RADAR_BOTTOM_MARGIN.
 #define RADAR_TOP_MARGIN 85
 #define RADAR_BOTTOM_MARGIN 6
-#define RADAR_CY ((RADAR_TOP_MARGIN + (RADAR_H - RADAR_BOTTOM_MARGIN)) / 2)
-#define RADAR_R (((RADAR_H - RADAR_BOTTOM_MARGIN) - RADAR_TOP_MARGIN) / 2)
+#define RADAR_CY ((RADAR_TOP_MARGIN + (RADAR_DRAW_H - RADAR_BOTTOM_MARGIN)) / 2)
+#define RADAR_R (((RADAR_DRAW_H - RADAR_BOTTOM_MARGIN) - RADAR_TOP_MARGIN) / 2)
 
 #define SWEEP_PERIOD_MS 30000  // one full rotation = 30 seconds
 
@@ -641,10 +648,28 @@ static void draw_radar_home_reference_elsewhere(lv_layer_t *layer) {
 // for these to be printed the same as map's, not adapted to radar's own
 // plain-square blip style -- so this is a near-verbatim port of map_view.cpp's
 // draw_icon_legend()/draw_altitude_legend() (same icon shapes, same 6
-// altitude bands), just placed using RADAR_H, which is numerically identical
-// to map's CANVAS_H (both = LCD_V_RES - STATUS_BAR_HEIGHT).
+// altitude bands), anchored off RADAR_DRAW_H like the compass now is.
+#define LEGEND_X0 4
+#define LEGEND_W  248
+#define LEGEND_ICON_Y (RADAR_DRAW_H - 34)
+#define LEGEND_ALT_Y  (RADAR_DRAW_H - 14)
+
+// Solid backdrop behind both legend rows -- see map_view.cpp's
+// draw_legend_backdrop() for the full rationale (an airport/aircraft label
+// rendering underneath would otherwise read as jumbled overlapping text).
+static void draw_radar_legend_backdrop(lv_layer_t *layer) {
+    lv_draw_rect_dsc_t bg;
+    lv_draw_rect_dsc_init(&bg);
+    bg.bg_color = COLOR_BG;
+    bg.bg_opa = LV_OPA_COVER;
+    bg.radius = 6;
+    lv_area_t a = {(lv_coord_t)LEGEND_X0, (lv_coord_t)(LEGEND_ICON_Y - 6),
+                   (lv_coord_t)(LEGEND_X0 + LEGEND_W), (lv_coord_t)(RADAR_DRAW_H + 4)};
+    lv_draw_rect(layer, &bg, &a);
+}
+
 static void draw_radar_icon_legend(lv_layer_t *layer) {
-    int y = RADAR_H - 14;
+    int y = LEGEND_ICON_Y;
 
     struct { const char *label; IconType type; lv_color_t color; } entries[] = {
         {"COM",  ICON_AIRLINER, COLOR_COMMERCIAL},
@@ -687,7 +712,7 @@ static void draw_radar_altitude_legend(lv_layer_t *layer) {
     };
 
     int x = 8;
-    int y = RADAR_H + 6;
+    int y = LEGEND_ALT_Y;
 
     for (int i = 0; i < 6; i++) {
         lv_draw_rect_dsc_t swatch;
@@ -745,6 +770,7 @@ static void radar_draw_cb(lv_event_t *e) {
     }
     draw_sweep(layer);
     draw_blips(layer);
+    draw_radar_legend_backdrop(layer);
     draw_radar_icon_legend(layer);
     draw_radar_altitude_legend(layer);
     draw_filter_label(layer);

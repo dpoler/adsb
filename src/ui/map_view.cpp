@@ -70,22 +70,26 @@ static char _tracked_hex[7] = {};
 #define CANVAS_H (LCD_V_RES - STATUS_BAR_HEIGHT)
 #define BG_COLOR lv_color_hex(0x0a0a1a)
 
+// CANVAS_H is the canvas *object's* declared height (matches its tile
+// exactly) -- kept as-is for the object's own size, the filter-button
+// column, and overlay sizing, all of which are real LVGL layout that needs
+// the tile's actual bounds. But content drawn via this canvas's custom
+// draw callback turned out NOT to be clipped there in practice -- after
+// two rounds of "there's no room left" being reported as wrong anyway, the
+// real usable drawing height reaches much closer to the physical panel
+// height (LCD_V_RES) than CANVAS_H suggests. MAP_DRAW_H is that bigger
+// reach, used only for the projection (_proj.screen_h) and range-ring
+// math -- both must use the same value so rings and aircraft keep
+// agreeing on where a given nm distance actually plots; changing just one
+// of them would make the rings visually lie about range.
+#define MAP_DRAW_H (LCD_V_RES - 6)
+
 // Extra clearance reserved at the canvas's top edge so the outermost range
-// ring / home-marker cross don't touch the status bar directly above it --
-// without this the ring's radius is scaled to reach exactly y=0, i.e. zero
-// gap. _proj.top_margin (geo.h) shrinks the effective drawing height and
-// recenters down instead, so aircraft/rings/hit-testing (all routed through
-// to_screen()) stay consistent with each other. geo.h's to_screen() solves
-// this so the bottom edge always lands at exactly CANVAS_H regardless of
-// this value (only the top edge moves) -- reported as still too close to
-// the status bar, bumped from 40.
-// Reported again as still too close to the top, with clear unused room
-// below (the bottom edge is always pinned at exactly CANVAS_H by
-// to_screen()'s math regardless of this value -- see geo.h -- so growing
-// this both pushes the top edge down AND shrinks the effective radius a
-// bit, since the two ends of the circle sit a fixed CANVAS_H - MAP_TOP_MARGIN
-// apart). Bumped well past the last (50) pass to actually move the center,
-// not just nudge it.
+// ring / home-marker cross don't touch the status bar directly above it.
+// _proj.top_margin (geo.h) shrinks the effective drawing height and
+// recenters down instead of touching y=0. geo.h's to_screen() solves this
+// so the bottom edge always lands at exactly MAP_DRAW_H regardless of this
+// value (only the top edge moves).
 #define MAP_TOP_MARGIN 90
 
 // Per-view button/label pointers for filter buttons
@@ -356,14 +360,15 @@ static void draw_range_rings(lv_layer_t *layer) {
 
     float radius_nm = range_get_nm();
     // Same effective-height/recentered-down math as to_screen() (geo.h) --
-    // the rings have to line up with wherever aircraft actually plot.
-    float scale = (float)(CANVAS_H - _proj.top_margin) / (radius_nm * 2.0f);
+    // the rings have to line up with wherever aircraft actually plot, so
+    // this must use the same MAP_DRAW_H the projection's screen_h uses.
+    float scale = (float)(MAP_DRAW_H - _proj.top_margin) / (radius_nm * 2.0f);
 
     float ring_interval = radius_nm <= 10 ? 2.0f : (radius_nm <= 25 ? 5.0f : 10.0f);
     for (float r = ring_interval; r <= radius_nm; r += ring_interval) {
         int pixel_r = (int)(r * scale);
         arc_dsc.center.x = CANVAS_W / 2 + _proj.offset_x;
-        arc_dsc.center.y = CANVAS_H / 2 + _proj.top_margin / 2 + _proj.offset_y;
+        arc_dsc.center.y = MAP_DRAW_H / 2 + _proj.top_margin / 2 + _proj.offset_y;
         arc_dsc.radius = pixel_r;
         lv_draw_arc(layer, &arc_dsc);
     }
@@ -792,6 +797,30 @@ static void draw_aircraft(lv_layer_t *layer) {
     _list->unlock();
 }
 
+// Shared legend geometry -- both rows anchor off MAP_DRAW_H (the same
+// bigger drawable reach the range rings now use, see above), not CANVAS_H.
+#define LEGEND_X0 4
+#define LEGEND_W  248
+#define LEGEND_ICON_Y (MAP_DRAW_H - 34)
+#define LEGEND_ALT_Y  (MAP_DRAW_H - 14)
+
+// Solid backdrop behind both legend rows. Without this, an airport/runway
+// label (or an aircraft tag) that happens to render underneath reads as
+// jumbled overlapping text -- the legend was already drawn last so it sits
+// on top and stays legible on its own, but "legible on top of a mess" isn't
+// the same as "not a mess." An opaque panel (not just high-opacity) erases
+// whatever's underneath within its footprint instead of layering over it.
+static void draw_legend_backdrop(lv_layer_t *layer) {
+    lv_draw_rect_dsc_t bg;
+    lv_draw_rect_dsc_init(&bg);
+    bg.bg_color = BG_COLOR;
+    bg.bg_opa = LV_OPA_COVER;
+    bg.radius = 6;
+    lv_area_t a = {(lv_coord_t)LEGEND_X0, (lv_coord_t)(LEGEND_ICON_Y - 6),
+                   (lv_coord_t)(LEGEND_X0 + LEGEND_W), (lv_coord_t)(MAP_DRAW_H + 4)};
+    lv_draw_rect(layer, &bg, &a);
+}
+
 static void draw_altitude_legend(lv_layer_t *layer) {
     // Colors sourced from altitude_color() at a representative altitude in
     // each labeled band, rather than a second hardcoded palette -- keeps the
@@ -806,13 +835,7 @@ static void draw_altitude_legend(lv_layer_t *layer) {
     };
 
     int x = 8;
-    // User corrected an earlier, too-cautious attempt here: reported both
-    // legend rows still floating well above the bottom of the screen with
-    // room to spare even after a first shift, so this pushes further --
-    // past the CANVAS_H boundary this file's other geometry (range rings,
-    // etc.) treats as the hard edge. If this now clips, pull it back up;
-    // per the user, it shouldn't.
-    int y = CANVAS_H + 6;
+    int y = LEGEND_ALT_Y;
 
     for (int i = 0; i < 6; i++) {
         lv_draw_rect_dsc_t swatch;
@@ -840,8 +863,7 @@ static void draw_altitude_legend(lv_layer_t *layer) {
 
 // Draw icon type legend above altitude legend — uses category colors
 static void draw_icon_legend(lv_layer_t *layer) {
-    // See draw_altitude_legend() below -- same correction, same reasoning.
-    int y = CANVAS_H - 14;
+    int y = LEGEND_ICON_Y;
 
     struct { const char *label; IconType type; lv_color_t color; } entries[] = {
         {"COM",  ICON_AIRLINER, COLOR_COMMERCIAL}, // matches the filter button's label (filters.cpp) -- was "AIR", inconsistent
@@ -967,6 +989,7 @@ static void canvas_draw_cb(lv_event_t *e) {
         draw_saved_airports(layer);
     }
     draw_aircraft(layer);
+    draw_legend_backdrop(layer);
     draw_icon_legend(layer);
     draw_altitude_legend(layer);
     draw_filter_label(layer);
@@ -980,7 +1003,7 @@ void map_view_init(lv_obj_t *parent, AircraftList *list) {
     _proj.center_lon = g_config.home_lon;
     _proj.radius_nm = range_get_nm();
     _proj.screen_w = CANVAS_W;
-    _proj.screen_h = CANVAS_H;
+    _proj.screen_h = MAP_DRAW_H;
     _proj.top_margin = MAP_TOP_MARGIN;
     _proj.offset_x = 0;
     _proj.offset_y = 0;
