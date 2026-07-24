@@ -49,10 +49,11 @@ static uint32_t _trails_cleared_at = 0;
 // TOP_MARGIN) rather than actually reclaiming the unused room below it
 // (reported: bullseye still too close to the status bar despite visible
 // empty space at the bottom of the screen).
-// Trimmed back a bit at the user's request to make better use of the
-// display -- confirmed the status-bar clearance itself was fine, this just
-// grows the compass's effective radius modestly.
-#define RADAR_TOP_MARGIN 45
+// Reported again as still too close to the top, with clear unused room
+// below. Bumped well past the last (45) pass to actually move the center
+// down, not just nudge it -- costs some radius, since RADAR_R is fixed by
+// the gap between RADAR_TOP_MARGIN and RADAR_H - RADAR_BOTTOM_MARGIN.
+#define RADAR_TOP_MARGIN 85
 #define RADAR_BOTTOM_MARGIN 6
 #define RADAR_CY ((RADAR_TOP_MARGIN + (RADAR_H - RADAR_BOTTOM_MARGIN)) / 2)
 #define RADAR_R (((RADAR_H - RADAR_BOTTOM_MARGIN) - RADAR_TOP_MARGIN) / 2)

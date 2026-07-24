@@ -79,11 +79,14 @@ static char _tracked_hex[7] = {};
 // this so the bottom edge always lands at exactly CANVAS_H regardless of
 // this value (only the top edge moves) -- reported as still too close to
 // the status bar, bumped from 40.
-// Trimmed back a bit (70 -> 50) at the user's request to make better use of
-// the display -- confirmed the status-bar clearance itself was fine, this
-// just grows the rings' effective radius modestly (bottom edge still pinned
-// at exactly CANVAS_H regardless of this value, per to_screen() in geo.h).
-#define MAP_TOP_MARGIN 50
+// Reported again as still too close to the top, with clear unused room
+// below (the bottom edge is always pinned at exactly CANVAS_H by
+// to_screen()'s math regardless of this value -- see geo.h -- so growing
+// this both pushes the top edge down AND shrinks the effective radius a
+// bit, since the two ends of the circle sit a fixed CANVAS_H - MAP_TOP_MARGIN
+// apart). Bumped well past the last (50) pass to actually move the center,
+// not just nudge it.
+#define MAP_TOP_MARGIN 90
 
 // Per-view button/label pointers for filter buttons
 static lv_obj_t *_filter_btns[NUM_FILTERS] = {};
