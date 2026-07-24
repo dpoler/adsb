@@ -445,17 +445,26 @@ static void location_fetch_poll() {
         HTTPClient http;
         http.begin(client, url);
         http.collectHeaders(kAdsbLolHeaders, 1);
-        http.setTimeout(8000);
+        // Matches fetch_task's main-loop timeouts/buffer cap below -- this
+        // poll issues the exact same kind of point/radius query (same radius
+        // as whatever's currently selected, up to the widest 50nm preset), so
+        // a response here can be just as large as Home's. The old, tighter
+        // 8s/10s/128KB values here (vs 10s/15s/256KB there) were an
+        // unintentional asymmetry that plausibly caused the read loop to hit
+        // its deadline mid-response on a large saved-location fetch, leaving
+        // a truncated buffer that then failed JSON parsing with
+        // "IncompleteInput" (confirmed via the error logging added above).
+        http.setTimeout(10000);
         int httpCode = http.GET();
         if (httpCode == HTTP_CODE_OK) {
             int content_len = http.getSize();
-            size_t buf_size = (content_len > 0) ? (size_t)content_len + 1 : 128 * 1024;
+            size_t buf_size = (content_len > 0) ? (size_t)content_len + 1 : 256 * 1024;
             char *buf = (char *)heap_caps_malloc(buf_size, MALLOC_CAP_SPIRAM);
             size_t total = 0;
             if (buf) {
                 size_t target = (content_len > 0) ? (size_t)content_len : buf_size - 1;
                 WiFiClient *stream = http.getStreamPtr();
-                uint32_t deadline = millis() + 10000;
+                uint32_t deadline = millis() + 15000;
                 while (total < target && millis() < deadline) {
                     int avail = stream->available();
                     if (avail > 0) {
@@ -477,7 +486,7 @@ static void location_fetch_poll() {
                         _loc_stats.fetch_ok++;
                     } else {
                         _loc_stats.fetch_fail++;
-                        error_log_add("LocPoll JSON: %s (%uB)", err.c_str(), total);
+                        error_log_add("LocPoll JSON: %s (%uB/%dB)", err.c_str(), total, content_len);
                     }
                 } else {
                     _loc_stats.fetch_fail++;
