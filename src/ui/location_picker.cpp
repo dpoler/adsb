@@ -9,7 +9,7 @@
 #include <cctype>
 
 #define PANEL_W    320
-#define ROW_H      44
+#define ROW_H      56   // was 44 -- felt cramped once the reorder handle was added (reported)
 #define BTN_W      60   // matches status_bar.cpp's CHIP_W -- same width as every other button in the bar (nav tabs, range/TRAIL/TAG chips)
 #define BTN_H      24   // matches status_bar.cpp's CHIP_H (and the nav tabs' own height)
 
@@ -131,16 +131,70 @@ static void remove_row_click_cb(lv_event_t *e) {
     build_list_view(); // rebuild panel in place
 }
 
-static void move_up_click_cb(lv_event_t *e) {
-    int idx = (int)(intptr_t)lv_event_get_user_data(e);
-    locations_reorder(idx, idx - 1);
-    build_list_view(); // rebuild panel in place -- same pattern as remove_row_click_cb
-}
+// Drag-to-reorder -- up/down arrow buttons were tried first but looked
+// misaligned in practice (reported). The handle is a dedicated child object
+// (not the row itself) specifically so a tap-to-select on the row body and
+// a drag-to-reorder on the handle can't be confused for each other -- same
+// reason the "X" remove icon already coexists with row selection without a
+// guard flag (a press+release fully inside a plain clickable child never
+// bubbles up to the row's own CLICKED handler).
+//
+// lv_obj_move_to_index() reorders the row's *widget* position among its
+// _panel siblings live, during the drag -- since _panel is a flex column,
+// LVGL re-flows every other row's on-screen position automatically the
+// moment the index changes. locations_reorder() (the actual data commit)
+// only runs once, on release. translate_y is a pure render-time offset that
+// makes the row track the finger continuously across those index jumps --
+// each jump instantly shifts the row's *layout* position by +-ROW_H, so the
+// translate is corrected by the same amount in the same tick to avoid a
+// visible snap.
+static lv_obj_t *_drag_row = nullptr;
+static int _drag_start_idx = -1;
+static int _drag_cur_idx = -1;
+static lv_coord_t _drag_start_y = 0;
 
-static void move_down_click_cb(lv_event_t *e) {
-    int idx = (int)(intptr_t)lv_event_get_user_data(e);
-    locations_reorder(idx, idx + 1);
-    build_list_view();
+static void drag_handle_event_cb(lv_event_t *e) {
+    lv_event_code_t code = lv_event_get_code(e);
+    lv_obj_t *row = lv_obj_get_parent(lv_event_get_target_obj(e));
+
+    if (code == LV_EVENT_PRESSED) {
+        _drag_row = row;
+        _drag_start_idx = lv_obj_get_index(row) - 1; // -1: the Home row is always sibling 0
+        _drag_cur_idx = _drag_start_idx;
+        lv_point_t p;
+        lv_indev_get_point(lv_indev_active(), &p);
+        _drag_start_y = p.y;
+        return;
+    }
+
+    if (row != _drag_row) return; // stray event for a handle that isn't mid-drag
+
+    if (code == LV_EVENT_PRESSING) {
+        lv_point_t p;
+        lv_indev_get_point(lv_indev_active(), &p);
+        int dy = p.y - _drag_start_y;
+
+        int steps = (dy >= 0) ? (dy + ROW_H / 2) / ROW_H : -((-dy + ROW_H / 2) / ROW_H);
+        int desired_idx = _drag_start_idx + steps;
+        int n = locations_count();
+        if (desired_idx < 0) desired_idx = 0;
+        if (desired_idx > n - 1) desired_idx = n - 1;
+
+        if (desired_idx != _drag_cur_idx) {
+            lv_obj_move_to_index(row, desired_idx + 1); // +1: same Home-row offset
+            _drag_cur_idx = desired_idx;
+        }
+
+        int settled_dy = (_drag_cur_idx - _drag_start_idx) * ROW_H;
+        lv_obj_set_style_translate_y(row, dy - settled_dy, 0);
+    } else if (code == LV_EVENT_RELEASED || code == LV_EVENT_PRESS_LOST) {
+        lv_obj_set_style_translate_y(row, 0, 0);
+        if (_drag_cur_idx != _drag_start_idx) locations_reorder(_drag_start_idx, _drag_cur_idx);
+        _drag_row = nullptr;
+        _drag_start_idx = -1;
+        _drag_cur_idx = -1;
+        build_list_view(); // rebuild for a clean widget set at the canonical order
+    }
 }
 
 // Note: build_list_view()/build_add_view() are also called from click events
@@ -233,27 +287,19 @@ static void build_list_view() {
         lv_obj_set_ext_click_area(rm, 10);
         lv_obj_add_event_cb(rm, remove_row_click_cb, LV_EVENT_CLICKED, (void *)(intptr_t)i);
 
-        // Reorder -- only shown where it's a valid move (no "up" on the
-        // first saved row, no "down" on the last), same insertion-order
-        // array locations_reorder() operates on.
-        if (i > 0) {
-            lv_obj_t *up = lv_label_create(row);
-            lv_label_set_text(up, LV_SYMBOL_UP);
-            lv_obj_set_style_text_color(up, COLOR_DIM, 0);
-            lv_obj_align(up, LV_ALIGN_RIGHT_MID, -60, 0);
-            lv_obj_add_flag(up, LV_OBJ_FLAG_CLICKABLE);
-            lv_obj_set_ext_click_area(up, 8);
-            lv_obj_add_event_cb(up, move_up_click_cb, LV_EVENT_CLICKED, (void *)(intptr_t)i);
-        }
-        if (i < n - 1) {
-            lv_obj_t *down = lv_label_create(row);
-            lv_label_set_text(down, LV_SYMBOL_DOWN);
-            lv_obj_set_style_text_color(down, COLOR_DIM, 0);
-            lv_obj_align(down, LV_ALIGN_RIGHT_MID, -34, 0);
-            lv_obj_add_flag(down, LV_OBJ_FLAG_CLICKABLE);
-            lv_obj_set_ext_click_area(down, 8);
-            lv_obj_add_event_cb(down, move_down_click_cb, LV_EVENT_CLICKED, (void *)(intptr_t)i);
-        }
+        // Drag handle -- press and drag vertically to reorder (see
+        // drag_handle_event_cb for how the live widget move + eventual
+        // locations_reorder() commit work together).
+        lv_obj_t *grip = lv_label_create(row);
+        lv_label_set_text(grip, LV_SYMBOL_BARS);
+        lv_obj_set_style_text_color(grip, COLOR_DIM, 0);
+        lv_obj_align(grip, LV_ALIGN_RIGHT_MID, -36, 0);
+        lv_obj_add_flag(grip, LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_set_ext_click_area(grip, 10);
+        lv_obj_add_event_cb(grip, drag_handle_event_cb, LV_EVENT_PRESSED, nullptr);
+        lv_obj_add_event_cb(grip, drag_handle_event_cb, LV_EVENT_PRESSING, nullptr);
+        lv_obj_add_event_cb(grip, drag_handle_event_cb, LV_EVENT_RELEASED, nullptr);
+        lv_obj_add_event_cb(grip, drag_handle_event_cb, LV_EVENT_PRESS_LOST, nullptr);
     }
 
     // Add row
