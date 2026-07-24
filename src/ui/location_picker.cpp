@@ -218,8 +218,15 @@ static void build_list_view() {
     _add_ta = nullptr;
 
     int rows = 1 + locations_count() + 1; // Home + saved + "Add" row
+    int max_h = LCD_V_RES - STATUS_BAR_HEIGHT - 16; // as tall as the screen allows below the status bar
+    // Reported as looking too short with just a couple of entries -- grows
+    // with content same as before, but no longer sized exactly to it; a
+    // generous floor keeps it from looking like a tiny box floating over the
+    // dimmed backdrop, and it only actually scrolls once rows*ROW_H genuinely
+    // exceeds max_h (so many saved airports there's no screen space left).
+    int min_h = 340;
     int panel_h = rows * ROW_H + 8;
-    int max_h = LCD_V_RES - STATUS_BAR_HEIGHT - 16;
+    if (panel_h < min_h) panel_h = min_h;
     if (panel_h > max_h) panel_h = max_h;
 
     _panel = lv_obj_create(_overlay);
