@@ -971,6 +971,43 @@ static void sync_active_location() {
     if (_canvas) lv_obj_invalidate(_canvas);
 }
 
+// TEMPORARY -- pixel-measurement pass for the bullseye/legend centering
+// bug (project backlog: "bullseye/legend centering, reverted"). Draws a
+// labeled 50px ruler (absolute screen Y, accounting for STATUS_BAR_HEIGHT)
+// so a single photo of the running screen can be measured against real,
+// known reference lines instead of guessing where the status bar/swipe
+// bar/bullseye/legend actually sit. Delete this whole #if block (and the
+// matching one in radar_view.cpp, and the scrollbar-mode override in
+// views.cpp) once the real fix lands from measured values.
+#define DEBUG_MEASURE_RULER 1
+#if DEBUG_MEASURE_RULER
+static void draw_debug_ruler(lv_layer_t *layer) {
+    lv_draw_line_dsc_t line;
+    lv_draw_line_dsc_init(&line);
+    line.color = lv_color_hex(0xff00ff);
+    line.width = 1;
+    line.opa = LV_OPA_70;
+
+    lv_draw_label_dsc_t lbl;
+    lv_draw_label_dsc_init(&lbl);
+    lbl.color = lv_color_hex(0xff00ff);
+    lbl.font = &lv_font_montserrat_10;
+    lbl.opa = LV_OPA_COVER;
+
+    for (int local_y = 0; local_y <= CANVAS_H; local_y += 50) {
+        line.p1 = {0, (lv_value_precise_t)local_y};
+        line.p2 = {(lv_value_precise_t)CANVAS_W, (lv_value_precise_t)local_y};
+        lv_draw_line(layer, &line);
+
+        char buf[8];
+        snprintf(buf, sizeof(buf), "%d", local_y + STATUS_BAR_HEIGHT);
+        lbl.text = buf;
+        lv_area_t a = {2, (lv_coord_t)(local_y + 2), 50, (lv_coord_t)(local_y + 14)};
+        lv_draw_label(layer, &lbl, &a);
+    }
+}
+#endif
+
 static void canvas_draw_cb(lv_event_t *e) {
     lv_layer_t *layer = lv_event_get_layer(e);
 
@@ -993,6 +1030,9 @@ static void canvas_draw_cb(lv_event_t *e) {
     draw_icon_legend(layer);
     draw_altitude_legend(layer);
     draw_filter_label(layer);
+#if DEBUG_MEASURE_RULER
+    draw_debug_ruler(layer);
+#endif
 }
 
 void map_view_init(lv_obj_t *parent, AircraftList *list) {

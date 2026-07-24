@@ -106,6 +106,13 @@ void views_init(lv_obj_t *parent, AircraftList *list) {
     lv_obj_set_size(tileview, LCD_H_RES, CONTENT_H);
     lv_obj_set_style_bg_color(tileview, lv_color_hex(0x0a0a1a), 0);
     lv_obj_set_style_bg_opa(tileview, LV_OPA_COVER, 0);
+    // TEMPORARY -- forces the "swipe bar" (this tileview's own horizontal
+    // scrollbar) to stay visible instead of only appearing transiently
+    // mid-swipe, so a single still photo can be measured against it (see
+    // project backlog: "bullseye/legend centering, reverted"). Revert to
+    // the default (don't call this at all) once that measurement pass is
+    // done -- delete alongside map_view.cpp/radar_view.cpp's DEBUG_MEASURE_RULER.
+    lv_obj_set_scrollbar_mode(tileview, LV_SCROLLBAR_MODE_ON);
 
     // Create 4 horizontal tiles — all get opaque backgrounds to prevent bleed-through during scroll animation.
     // Runway diagrams live inside Map view now (see map_view.cpp draw_saved_airports) —

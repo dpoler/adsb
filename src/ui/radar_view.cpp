@@ -754,6 +754,38 @@ static void draw_filter_label(lv_layer_t *layer) {
     lv_draw_label(layer, &lbl, &la);
 }
 
+// TEMPORARY -- see map_view.cpp's draw_debug_ruler() for the full
+// rationale. Delete alongside that one and the scrollbar-mode override in
+// views.cpp once the real centering fix lands from measured values.
+#define DEBUG_MEASURE_RULER 1
+#if DEBUG_MEASURE_RULER
+static void draw_debug_ruler(lv_layer_t *layer) {
+    lv_draw_line_dsc_t line;
+    lv_draw_line_dsc_init(&line);
+    line.color = lv_color_hex(0xff00ff);
+    line.width = 1;
+    line.opa = LV_OPA_70;
+
+    lv_draw_label_dsc_t lbl;
+    lv_draw_label_dsc_init(&lbl);
+    lbl.color = lv_color_hex(0xff00ff);
+    lbl.font = &lv_font_montserrat_10;
+    lbl.opa = LV_OPA_COVER;
+
+    for (int local_y = 0; local_y <= RADAR_H; local_y += 50) {
+        line.p1 = {0, (lv_value_precise_t)local_y};
+        line.p2 = {(lv_value_precise_t)RADAR_W, (lv_value_precise_t)local_y};
+        lv_draw_line(layer, &line);
+
+        char buf[8];
+        snprintf(buf, sizeof(buf), "%d", local_y + STATUS_BAR_HEIGHT);
+        lbl.text = buf;
+        lv_area_t a = {2, (lv_coord_t)(local_y + 2), 50, (lv_coord_t)(local_y + 14)};
+        lv_draw_label(layer, &lbl, &a);
+    }
+}
+#endif
+
 static void radar_draw_cb(lv_event_t *e) {
     lv_layer_t *layer = lv_event_get_layer(e);
     draw_rings(layer);
@@ -774,6 +806,9 @@ static void radar_draw_cb(lv_event_t *e) {
     draw_radar_icon_legend(layer);
     draw_radar_altitude_legend(layer);
     draw_filter_label(layer);
+#if DEBUG_MEASURE_RULER
+    draw_debug_ruler(layer);
+#endif
 }
 
 static void update_filter_visuals() {
