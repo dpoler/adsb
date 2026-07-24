@@ -37,37 +37,33 @@ static uint32_t _trails_cleared_at = 0;
 
 #define RADAR_W LCD_H_RES
 #define RADAR_H (LCD_V_RES - STATUS_BAR_HEIGHT)
-#define RADAR_CX (RADAR_W / 2) // horizontal centering never changes
-
-// The tileview draws its own horizontal scrollbar ("swipe bar") near the
-// bottom of the screen -- content drawn past its top edge sits under/
-// behind it. views_get_swipe_bar_top() (views.cpp) reads that boundary
-// straight from LVGL (lv_obj_get_scrollbar_area()) instead of guessing it
-// from theme constants.
-//
-// Compass radius is a fixed size (user: "keep it the same size"),
-// decoupled from centering -- _radar_cy/_radar_r are runtime values (not
-// compile-time macros) recomputed each frame by update_radar_vertical_
-// bounds(), centering the fixed-radius circle in the live gap between the
-// status bar and the swipe bar. to_radar_screen() (aircraft position +
-// hit-testing) derives its scale from these same two values, so the
-// compass and aircraft can never disagree about where a given range plots
-// -- extending the compass necessarily extends where aircraft plot too.
-// Possible side effect worth watching for on hardware: aircraft very near
-// the reclaimed outer edge may render past where LVGL's own touch
-// hit-testing still considers "on the canvas object" (still sized to
-// RADAR_H), even though they're visible.
-#define RADAR_BULLSEYE_R 251
-static int _radar_cy = RADAR_H / 2;
-static int _radar_r = RADAR_BULLSEYE_R;
-
-// Called once per canvas redraw (radar_draw_cb()) to keep _radar_cy
-// centered on the live [status bar, swipe bar] gap.
-static void update_radar_vertical_bounds() {
-    int swipe_top_local = views_get_swipe_bar_top() - STATUS_BAR_HEIGHT;
-    _radar_cy = swipe_top_local / 2; // status-bar edge is local y=0
-    _radar_r = RADAR_BULLSEYE_R;
-}
+#define RADAR_CX (RADAR_W / 2)
+// RADAR_H is the canvas *object's* declared height (matches its tile) --
+// kept as-is for the object's own size and the filter-button column, which
+// are real LVGL layout needing the tile's actual bounds. But content drawn
+// via this canvas's custom draw callback turned out NOT to be clipped
+// there in practice -- after two rounds of "no room left" being reported
+// as wrong anyway, the real usable drawing height reaches much closer to
+// the physical panel height (LCD_V_RES) than RADAR_H suggests.
+// RADAR_DRAW_H is that bigger reach. Note this affects aircraft position
+// too, not just the compass -- to_radar_screen() (used for both) derives
+// its scale from RADAR_R/RADAR_CY directly, unlike map_view.cpp where the
+// rings and _proj.screen_h are separate; keeping them unified here is
+// necessary so the rings don't visually lie about where a given range
+// actually plots. Possible side effect worth watching for on hardware:
+// aircraft very near the reclaimed outer edge may render past where
+// LVGL's own touch hit-testing still considers "on the canvas object"
+// (which is still sized to RADAR_H), even though they're visible.
+#define RADAR_DRAW_H (LCD_V_RES - 6)
+// Clearance above the compass rose so its "N" label / outer ring don't touch
+// the status bar directly above the canvas, and a separate (small) clearance
+// below so the outer ring doesn't touch the very bottom edge either.
+// RADAR_CY/RADAR_R are solved so the circle's top edge lands at exactly
+// RADAR_TOP_MARGIN and its bottom edge at exactly RADAR_DRAW_H - RADAR_BOTTOM_MARGIN.
+#define RADAR_TOP_MARGIN 85
+#define RADAR_BOTTOM_MARGIN 6
+#define RADAR_CY ((RADAR_TOP_MARGIN + (RADAR_DRAW_H - RADAR_BOTTOM_MARGIN)) / 2)
+#define RADAR_R (((RADAR_DRAW_H - RADAR_BOTTOM_MARGIN) - RADAR_TOP_MARGIN) / 2)
 
 #define SWEEP_PERIOD_MS 30000  // one full rotation = 30 seconds
 
@@ -102,16 +98,16 @@ static bool to_radar_screen(float lat, float lon, int &sx, int &sy) {
 
     if (dist_nm > _proj.radius_nm) return false;
 
-    float scale = (float)_radar_r / _proj.radius_nm;
+    float scale = (float)RADAR_R / _proj.radius_nm;
     sx = RADAR_CX + (int)(dx_nm * scale);
-    sy = _radar_cy - (int)(dy_nm * scale);
+    sy = RADAR_CY - (int)(dy_nm * scale);
     return true;
 }
 
 // Get bearing angle (0=N, 90=E) from radar center to a screen point
 static float blip_angle(int sx, int sy) {
     float dx = (float)(sx - RADAR_CX);
-    float dy = (float)(_radar_cy - sy); // invert Y (screen Y goes down)
+    float dy = (float)(RADAR_CY - sy); // invert Y (screen Y goes down)
     float angle = atan2f(dx, dy) * 180.0f / M_PI;
     if (angle < 0) angle += 360.0f;
     return angle;
@@ -132,7 +128,7 @@ static void draw_rings(lv_layer_t *layer) {
     arc.start_angle = 0;
     arc.end_angle = 360;
     arc.center.x = RADAR_CX;
-    arc.center.y = _radar_cy;
+    arc.center.y = RADAR_CY;
 
     float range = range_get_nm();
     float ring_nm;
@@ -141,11 +137,11 @@ static void draw_rings(lv_layer_t *layer) {
     else if (range >= 20) ring_nm = 5.0f;
     else ring_nm = 1.0f;
 
-    float scale = (float)_radar_r / range;
+    float scale = (float)RADAR_R / range;
     for (float r = ring_nm; r <= range; r += ring_nm) {
         arc.radius = (int)(r * scale);
         arc.center.x = RADAR_CX;
-        arc.center.y = _radar_cy;
+        arc.center.y = RADAR_CY;
         lv_draw_arc(layer, &arc);
     }
 
@@ -158,8 +154,8 @@ static void draw_rings(lv_layer_t *layer) {
     lbl.color = COLOR_RING;
     lbl.font = &lv_font_montserrat_14;
     for (int i = 0; i < 4; i++) {
-        int lx = RADAR_CX + dx[i] * (_radar_r + 2) - 5;
-        int ly = _radar_cy + dy[i] * (_radar_r + 2) - 7;
+        int lx = RADAR_CX + dx[i] * (RADAR_R + 2) - 5;
+        int ly = RADAR_CY + dy[i] * (RADAR_R + 2) - 7;
         lv_area_t area = {(lv_coord_t)lx, (lv_coord_t)ly,
                           (lv_coord_t)(lx + 20), (lv_coord_t)(ly + 16)};
         lbl.text = dirs[i];
@@ -172,18 +168,18 @@ static void draw_rings(lv_layer_t *layer) {
     line.color = COLOR_RING;
     line.width = 1;
     line.opa = LV_OPA_30;
-    line.p1 = {RADAR_CX, _radar_cy - _radar_r};
-    line.p2 = {RADAR_CX, _radar_cy + _radar_r};
+    line.p1 = {RADAR_CX, RADAR_CY - RADAR_R};
+    line.p2 = {RADAR_CX, RADAR_CY + RADAR_R};
     lv_draw_line(layer, &line);
-    line.p1 = {RADAR_CX - _radar_r, _radar_cy};
-    line.p2 = {RADAR_CX + _radar_r, _radar_cy};
+    line.p1 = {RADAR_CX - RADAR_R, RADAR_CY};
+    line.p2 = {RADAR_CX + RADAR_R, RADAR_CY};
     lv_draw_line(layer, &line);
 }
 
 static void draw_sweep(lv_layer_t *layer) {
     float rad = _sweep_angle * M_PI / 180.0f;
-    int ex = RADAR_CX + (int)(_radar_r * sinf(rad));
-    int ey = _radar_cy - (int)(_radar_r * cosf(rad));
+    int ex = RADAR_CX + (int)(RADAR_R * sinf(rad));
+    int ey = RADAR_CY - (int)(RADAR_R * cosf(rad));
 
     // Sweep line
     lv_draw_line_dsc_t line;
@@ -191,18 +187,18 @@ static void draw_sweep(lv_layer_t *layer) {
     line.color = COLOR_SWEEP;
     line.width = 2;
     line.opa = LV_OPA_60;
-    line.p1 = {RADAR_CX, _radar_cy};
+    line.p1 = {RADAR_CX, RADAR_CY};
     line.p2 = {(lv_value_precise_t)ex, (lv_value_precise_t)ey};
     lv_draw_line(layer, &line);
 
     // Fading trail (draw 6 faded lines behind sweep)
     for (int i = 1; i <= 6; i++) {
         float trail_rad = (_sweep_angle - i * 3.0f) * M_PI / 180.0f;
-        int tx = RADAR_CX + (int)(_radar_r * sinf(trail_rad));
-        int ty = _radar_cy - (int)(_radar_r * cosf(trail_rad));
+        int tx = RADAR_CX + (int)(RADAR_R * sinf(trail_rad));
+        int ty = RADAR_CY - (int)(RADAR_R * cosf(trail_rad));
         line.opa = LV_OPA_40 - i * 6;
         line.width = 1;
-        line.p1 = {RADAR_CX, _radar_cy};
+        line.p1 = {RADAR_CX, RADAR_CY};
         line.p2 = {(lv_value_precise_t)tx, (lv_value_precise_t)ty};
         lv_draw_line(layer, &line);
     }
@@ -652,12 +648,11 @@ static void draw_radar_home_reference_elsewhere(lv_layer_t *layer) {
 // for these to be printed the same as map's, not adapted to radar's own
 // plain-square blip style -- so this is a near-verbatim port of map_view.cpp's
 // draw_icon_legend()/draw_altitude_legend() (same icon shapes, same 6
-// altitude bands), anchored directly off the live swipe-bar query like
-// map's now is.
+// altitude bands), anchored off RADAR_DRAW_H like the compass now is.
 #define LEGEND_X0 4
 #define LEGEND_W  248
-static int legend_icon_y() { return views_get_swipe_bar_top() - STATUS_BAR_HEIGHT - 34; }
-static int legend_alt_y()  { return views_get_swipe_bar_top() - STATUS_BAR_HEIGHT - 14; }
+#define LEGEND_ICON_Y (RADAR_DRAW_H - 34)
+#define LEGEND_ALT_Y  (RADAR_DRAW_H - 14)
 
 // Solid backdrop behind both legend rows -- see map_view.cpp's
 // draw_legend_backdrop() for the full rationale (an airport/aircraft label
@@ -668,14 +663,13 @@ static void draw_radar_legend_backdrop(lv_layer_t *layer) {
     bg.bg_color = COLOR_BG;
     bg.bg_opa = LV_OPA_COVER;
     bg.radius = 6;
-    int bottom = views_get_swipe_bar_top() - STATUS_BAR_HEIGHT; // flush with the swipe bar's own top edge
-    lv_area_t a = {(lv_coord_t)LEGEND_X0, (lv_coord_t)(legend_icon_y() - 6),
-                   (lv_coord_t)(LEGEND_X0 + LEGEND_W), (lv_coord_t)bottom};
+    lv_area_t a = {(lv_coord_t)LEGEND_X0, (lv_coord_t)(LEGEND_ICON_Y - 6),
+                   (lv_coord_t)(LEGEND_X0 + LEGEND_W), (lv_coord_t)(RADAR_DRAW_H + 4)};
     lv_draw_rect(layer, &bg, &a);
 }
 
 static void draw_radar_icon_legend(lv_layer_t *layer) {
-    int y = legend_icon_y();
+    int y = LEGEND_ICON_Y;
 
     struct { const char *label; IconType type; lv_color_t color; } entries[] = {
         {"COM",  ICON_AIRLINER, COLOR_COMMERCIAL},
@@ -718,7 +712,7 @@ static void draw_radar_altitude_legend(lv_layer_t *layer) {
     };
 
     int x = 8;
-    int y = legend_alt_y();
+    int y = LEGEND_ALT_Y;
 
     for (int i = 0; i < 6; i++) {
         lv_draw_rect_dsc_t swatch;
@@ -762,7 +756,6 @@ static void draw_filter_label(lv_layer_t *layer) {
 
 static void radar_draw_cb(lv_event_t *e) {
     lv_layer_t *layer = lv_event_get_layer(e);
-    update_radar_vertical_bounds();
     draw_rings(layer);
     // Secondary locations -- other airports + HOME-elsewhere marker.
     // Off gives the "just dots" look (VIEW menu, view_menu.cpp) -- the

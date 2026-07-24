@@ -156,20 +156,6 @@ lv_obj_t *views_get_tileview() {
     return tileview;
 }
 
-int views_get_swipe_bar_top() {
-    lv_area_t hor, ver;
-    lv_obj_get_scrollbar_area(tileview, &hor, &ver);
-    // hor.y1 (top edge) is valid whenever LVGL actually draws the
-    // horizontal scrollbar -- an empty/degenerate area (width or height
-    // <= 0) means it isn't drawing one right now (e.g. queried before
-    // layout, or scrollbar mode changed) -- fall back to a conservative
-    // estimate rather than a bogus/negative coordinate.
-    if (lv_area_get_width(&hor) > 0 && lv_area_get_height(&hor) > 0) {
-        return hor.y1;
-    }
-    return LCD_V_RES - 12;
-}
-
 void views_resume_last_view() {
     // Resume the view active at last shutdown/reboot instead of always
     // booting into Map -- last_view_idx is only ever written from a

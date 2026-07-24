@@ -29,18 +29,6 @@ int views_filterable_index();
 // Get the tileview object (for view cycling)
 lv_obj_t *views_get_tileview();
 
-// Screen-absolute Y of the top edge of the tileview's own horizontal
-// scrollbar ("swipe bar") -- queried directly from LVGL (lv_obj_get_
-// scrollbar_area()) rather than guessed from theme constants, since its
-// exact position/thickness depends on the active theme's DPI-scaled
-// padding. Map/Radar center their range rings/compass between this and
-// the status bar rather than assuming the tile's full declared height is
-// usable -- content drawn past this line would sit under/behind where the
-// scrollbar renders. Falls back to a conservative estimate if LVGL
-// reports no scrollbar area (e.g. scrollbar mode changed, or queried
-// before the tileview has ever laid out/scrolled).
-int views_get_swipe_bar_top();
-
 // Switch to a view by index — updates all state immediately, no tileview callback needed
 void views_switch_to(int idx);
 
