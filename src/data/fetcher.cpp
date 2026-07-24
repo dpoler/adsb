@@ -128,6 +128,7 @@ static uint32_t _last_update = 0;
 static TaskHandle_t _fetch_task_handle = nullptr;
 static TaskHandle_t _location_poll_task_handle = nullptr;
 static FetcherStats _fstats = {};
+static FetcherStats _loc_stats = {}; // location_fetch_poll's own counters -- see fetcher_get_location_stats()
 
 // Secondary point query for a non-home airport (APRT view). Guarded by its
 // own small mutex since it's written from the UI task and read from
@@ -467,13 +468,25 @@ static void location_fetch_poll() {
                     }
                 }
                 buf[total] = '\0';
+                _loc_stats.bytes_received += total;
                 if (total > 0) {
                     JsonDocument doc(&_psram_alloc);
-                    if (!deserializeJson(doc, buf, total)) {
+                    DeserializationError err = deserializeJson(doc, buf, total);
+                    if (!err) {
                         parse_aircraft_json(doc, &_loc_list, false);
+                        _loc_stats.fetch_ok++;
+                    } else {
+                        _loc_stats.fetch_fail++;
+                        error_log_add("LocPoll JSON: %s (%uB)", err.c_str(), total);
                     }
+                } else {
+                    _loc_stats.fetch_fail++;
+                    error_log_add("LocPoll: PSRAM alloc fail / empty resp");
                 }
                 heap_caps_free(buf);
+            } else {
+                _loc_stats.fetch_fail++;
+                error_log_add("LocPoll: PSRAM alloc fail");
             }
             _loc_consecutive_429s = 0;
         } else if (httpCode == 429) {
@@ -492,10 +505,13 @@ static void location_fetch_poll() {
                 if (backoff_ms > 300000UL) backoff_ms = 300000UL;
             }
             _loc_next_fetch = millis() + backoff_ms;
+            _loc_stats.fetch_fail++;
             Serial.printf("[LocPoll] HTTP 429 (rate limited) -- backing off %lus\n",
                 (unsigned long)(backoff_ms / 1000));
         } else {
             _loc_consecutive_429s = 0;
+            _loc_stats.fetch_fail++;
+            error_log_add("LocPoll HTTP %d", httpCode);
         }
         http.end();
         http_mutex_release();
@@ -763,4 +779,8 @@ uint32_t fetcher_last_update() {
 
 const FetcherStats* fetcher_get_stats() {
     return &_fstats;
+}
+
+const FetcherStats* fetcher_get_location_stats() {
+    return &_loc_stats;
 }

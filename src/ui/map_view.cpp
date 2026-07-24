@@ -156,7 +156,16 @@ static void overlay_dismiss() {
 static void overlay_update() {
     if (!_overlay || _overlay_dismissed) return;
 
-    const FetcherStats *fs = fetcher_get_stats();
+    // If a saved (non-Home) location is active on boot (resume-on-boot,
+    // locations.cpp), _list is fetcher_location_list(), fed entirely by the
+    // separate location_fetch_poll() -- the main fetcher_get_stats() counters
+    // only ever reflect the Home feed, which keeps ticking "N ok / 0 err"
+    // regardless, misleadingly implying everything's fine while the actual
+    // feed this overlay is waiting on is a different poll entirely (reported:
+    // stuck on "Waiting for aircraft..." with healthy-looking Home stats).
+    bool on_saved_location = (locations_active_index() != -1);
+    const FetcherStats *net_fs = fetcher_get_stats(); // ip_addr is global network state either way
+    const FetcherStats *fs = on_saved_location ? fetcher_get_location_stats() : net_fs;
     NetType net = fetcher_connection_type();
 
     // Status text
@@ -175,7 +184,7 @@ static void overlay_update() {
     // Network info
     if (net != NET_NONE) {
         const char *type = (net == NET_ETHERNET) ? "ETH" : "WiFi";
-        lv_label_set_text_fmt(_overlay_net, "%s  %s", type, fs->ip_addr);
+        lv_label_set_text_fmt(_overlay_net, "%s  %s", type, net_fs->ip_addr);
     } else {
         lv_label_set_text(_overlay_net, g_config.use_ethernet ? "Ethernet..." : "WiFi...");
     }

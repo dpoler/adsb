@@ -32,3 +32,10 @@ struct FetcherStats {
     char ip_addr[16];
 };
 const FetcherStats* fetcher_get_stats();
+
+// Same shape, tracks the separate secondary-location poll (location_fetch_poll)
+// -- a saved (non-Home) location's fetch never touches fetcher_get_stats(),
+// so a boot-time overlay/UI that's actually waiting on a saved location's
+// aircraft needs its own ok/err/bytes rather than showing the unrelated
+// Home feed's numbers next to a permanently-empty list.
+const FetcherStats* fetcher_get_location_stats();
