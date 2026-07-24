@@ -70,27 +70,34 @@ static char _tracked_hex[7] = {};
 #define CANVAS_H (LCD_V_RES - STATUS_BAR_HEIGHT)
 #define BG_COLOR lv_color_hex(0x0a0a1a)
 
-// CANVAS_H is the canvas *object's* declared height (matches its tile
-// exactly) -- kept as-is for the object's own size, the filter-button
-// column, and overlay sizing, all of which are real LVGL layout that needs
-// the tile's actual bounds. But content drawn via this canvas's custom
-// draw callback turned out NOT to be clipped there in practice -- after
-// two rounds of "there's no room left" being reported as wrong anyway, the
-// real usable drawing height reaches much closer to the physical panel
-// height (LCD_V_RES) than CANVAS_H suggests. MAP_DRAW_H is that bigger
-// reach, used only for the projection (_proj.screen_h) and range-ring
-// math -- both must use the same value so rings and aircraft keep
-// agreeing on where a given nm distance actually plots; changing just one
-// of them would make the rings visually lie about range.
-#define MAP_DRAW_H (LCD_V_RES - 6)
+// The chase for "how far down can this go" turned out to have a concrete
+// answer instead of more guessing: the tileview draws its own horizontal
+// scrollbar ("swipe bar") near the bottom of the screen, and content drawn
+// past its top edge sits under/behind it. views_get_swipe_bar_top() reads
+// that boundary straight from LVGL (lv_obj_get_scrollbar_area()) instead
+// of estimating it from theme constants.
+//
+// Bullseye radius is now a fixed size (user: "keep it the same size"),
+// decoupled from centering -- update_proj_vertical_bounds() below solves
+// for whatever _proj.screen_h/top_margin values reproduce this exact
+// radius while centering on the current [status bar, swipe bar] gap,
+// through the same to_screen() formula (geo.h) aircraft positions and
+// hit-testing already use, so nothing here can disagree with where
+// aircraft actually plot.
+#define MAP_BULLSEYE_R 252
 
-// Extra clearance reserved at the canvas's top edge so the outermost range
-// ring / home-marker cross don't touch the status bar directly above it.
-// _proj.top_margin (geo.h) shrinks the effective drawing height and
-// recenters down instead of touching y=0. geo.h's to_screen() solves this
-// so the bottom edge always lands at exactly MAP_DRAW_H regardless of this
-// value (only the top edge moves).
-#define MAP_TOP_MARGIN 90
+// Recomputes _proj.screen_h/top_margin so draw_range_rings() and to_screen()
+// (aircraft positions, hit-testing) keep agreeing on where things plot,
+// centered in the live gap between the status bar and the swipe bar rather
+// than a fixed compile-time margin. Cheap -- called once per canvas redraw.
+static void update_proj_vertical_bounds() {
+    int swipe_top_local = views_get_swipe_bar_top() - STATUS_BAR_HEIGHT;
+    int center_y = swipe_top_local / 2; // status-bar edge is local y=0
+    // Solving center=(screen_h+top_margin)/2 and radius=(screen_h-top_margin)/2
+    // for screen_h/top_margin given a fixed radius and dynamic center.
+    _proj.screen_h = center_y + MAP_BULLSEYE_R;
+    _proj.top_margin = center_y - MAP_BULLSEYE_R;
+}
 
 // Per-view button/label pointers for filter buttons
 static lv_obj_t *_filter_btns[NUM_FILTERS] = {};
@@ -361,14 +368,15 @@ static void draw_range_rings(lv_layer_t *layer) {
     float radius_nm = range_get_nm();
     // Same effective-height/recentered-down math as to_screen() (geo.h) --
     // the rings have to line up with wherever aircraft actually plot, so
-    // this must use the same MAP_DRAW_H the projection's screen_h uses.
-    float scale = (float)(MAP_DRAW_H - _proj.top_margin) / (radius_nm * 2.0f);
+    // this must use the same _proj.screen_h/top_margin the projection uses
+    // (update_proj_vertical_bounds() keeps both in sync each frame).
+    float scale = (float)(_proj.screen_h - _proj.top_margin) / (radius_nm * 2.0f);
 
     float ring_interval = radius_nm <= 10 ? 2.0f : (radius_nm <= 25 ? 5.0f : 10.0f);
     for (float r = ring_interval; r <= radius_nm; r += ring_interval) {
         int pixel_r = (int)(r * scale);
         arc_dsc.center.x = CANVAS_W / 2 + _proj.offset_x;
-        arc_dsc.center.y = MAP_DRAW_H / 2 + _proj.top_margin / 2 + _proj.offset_y;
+        arc_dsc.center.y = _proj.screen_h / 2 + _proj.top_margin / 2 + _proj.offset_y;
         arc_dsc.radius = pixel_r;
         lv_draw_arc(layer, &arc_dsc);
     }
@@ -797,12 +805,13 @@ static void draw_aircraft(lv_layer_t *layer) {
     _list->unlock();
 }
 
-// Shared legend geometry -- both rows anchor off MAP_DRAW_H (the same
-// bigger drawable reach the range rings now use, see above), not CANVAS_H.
+// Shared legend geometry -- anchored directly off the live swipe-bar query
+// (views_get_swipe_bar_top()), not a compile-time guess at the canvas's
+// drawable height.
 #define LEGEND_X0 4
 #define LEGEND_W  248
-#define LEGEND_ICON_Y (MAP_DRAW_H - 34)
-#define LEGEND_ALT_Y  (MAP_DRAW_H - 14)
+static int legend_icon_y() { return views_get_swipe_bar_top() - STATUS_BAR_HEIGHT - 34; }
+static int legend_alt_y()  { return views_get_swipe_bar_top() - STATUS_BAR_HEIGHT - 14; }
 
 // Solid backdrop behind both legend rows. Without this, an airport/runway
 // label (or an aircraft tag) that happens to render underneath reads as
@@ -816,8 +825,9 @@ static void draw_legend_backdrop(lv_layer_t *layer) {
     bg.bg_color = BG_COLOR;
     bg.bg_opa = LV_OPA_COVER;
     bg.radius = 6;
-    lv_area_t a = {(lv_coord_t)LEGEND_X0, (lv_coord_t)(LEGEND_ICON_Y - 6),
-                   (lv_coord_t)(LEGEND_X0 + LEGEND_W), (lv_coord_t)(MAP_DRAW_H + 4)};
+    int bottom = views_get_swipe_bar_top() - STATUS_BAR_HEIGHT; // flush with the swipe bar's own top edge
+    lv_area_t a = {(lv_coord_t)LEGEND_X0, (lv_coord_t)(legend_icon_y() - 6),
+                   (lv_coord_t)(LEGEND_X0 + LEGEND_W), (lv_coord_t)bottom};
     lv_draw_rect(layer, &bg, &a);
 }
 
@@ -835,7 +845,7 @@ static void draw_altitude_legend(lv_layer_t *layer) {
     };
 
     int x = 8;
-    int y = LEGEND_ALT_Y;
+    int y = legend_alt_y();
 
     for (int i = 0; i < 6; i++) {
         lv_draw_rect_dsc_t swatch;
@@ -863,7 +873,7 @@ static void draw_altitude_legend(lv_layer_t *layer) {
 
 // Draw icon type legend above altitude legend — uses category colors
 static void draw_icon_legend(lv_layer_t *layer) {
-    int y = LEGEND_ICON_Y;
+    int y = legend_icon_y();
 
     struct { const char *label; IconType type; lv_color_t color; } entries[] = {
         {"COM",  ICON_AIRLINER, COLOR_COMMERCIAL}, // matches the filter button's label (filters.cpp) -- was "AIR", inconsistent
@@ -974,6 +984,8 @@ static void sync_active_location() {
 static void canvas_draw_cb(lv_event_t *e) {
     lv_layer_t *layer = lv_event_get_layer(e);
 
+    update_proj_vertical_bounds();
+
 #if HAS_STATIC_MAP
     draw_static_background(layer);
 #endif
@@ -1003,10 +1015,13 @@ void map_view_init(lv_obj_t *parent, AircraftList *list) {
     _proj.center_lon = g_config.home_lon;
     _proj.radius_nm = range_get_nm();
     _proj.screen_w = CANVAS_W;
-    _proj.screen_h = MAP_DRAW_H;
-    _proj.top_margin = MAP_TOP_MARGIN;
     _proj.offset_x = 0;
     _proj.offset_y = 0;
+    // screen_h/top_margin are set every redraw by update_proj_vertical_bounds()
+    // (canvas_draw_cb()) -- not known yet at init time, since they depend on
+    // the tileview's actual scrollbar position (views_get_swipe_bar_top()),
+    // which needs at least one layout pass to be valid. Harmless to leave
+    // zeroed here in the meantime; nothing reads _proj before the first draw.
 
     _canvas = lv_obj_create(parent);
     lv_obj_set_size(_canvas, CANVAS_W, CANVAS_H);
