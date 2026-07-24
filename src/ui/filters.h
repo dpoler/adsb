@@ -4,14 +4,18 @@
 
 // Filter indices — bit positions in the active-filter bitmask. Order here is
 // also the on-screen button order (top to bottom): COM, GA, HELI, MIL, EMG,
-// then VERT below the divider.
+// then VERT/HIGH/LOW below the divider (all three are altitude/motion
+// *states*, not alternative categories -- see FILTER_STATE_MASK in
+// filters.cpp).
 #define FILT_AIRLINE   0
 #define FILT_GA        1
 #define FILT_HELI      2
 #define FILT_MILITARY  3
 #define FILT_EMERGENCY 4
 #define FILT_VERT      5
-#define NUM_FILTERS    6
+#define FILT_HIGH      6
+#define FILT_LOW       7
+#define NUM_FILTERS    8
 
 struct FilterDef {
     const char *label;
