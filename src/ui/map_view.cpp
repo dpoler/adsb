@@ -793,12 +793,13 @@ static void draw_altitude_legend(lv_layer_t *layer) {
     };
 
     int x = 8;
-    // Reported as sitting too high -- there's very little room left to push
-    // this down further without the label (which extends to y+12) clipping
-    // past the canvas's true bottom edge at CANVAS_H; if it still looks too
-    // high after this, the fix is probably a more compact row (smaller
-    // font/swatch) rather than moving it further down.
-    int y = CANVAS_H - 14;
+    // User corrected an earlier, too-cautious attempt here: reported both
+    // legend rows still floating well above the bottom of the screen with
+    // room to spare even after a first shift, so this pushes further --
+    // past the CANVAS_H boundary this file's other geometry (range rings,
+    // etc.) treats as the hard edge. If this now clips, pull it back up;
+    // per the user, it shouldn't.
+    int y = CANVAS_H + 6;
 
     for (int i = 0; i < 6; i++) {
         lv_draw_rect_dsc_t swatch;
@@ -826,10 +827,8 @@ static void draw_altitude_legend(lv_layer_t *layer) {
 
 // Draw icon type legend above altitude legend — uses category colors
 static void draw_icon_legend(lv_layer_t *layer) {
-    // Reported as sitting too high -- shifted down 4px, same as
-    // draw_altitude_legend() below it, to keep the same gap between the two
-    // rows rather than letting them run together.
-    int y = CANVAS_H - 34;
+    // See draw_altitude_legend() below -- same correction, same reasoning.
+    int y = CANVAS_H - 14;
 
     struct { const char *label; IconType type; lv_color_t color; } entries[] = {
         {"COM",  ICON_AIRLINER, COLOR_COMMERCIAL}, // matches the filter button's label (filters.cpp) -- was "AIR", inconsistent

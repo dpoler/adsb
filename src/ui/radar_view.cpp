@@ -4,6 +4,7 @@
 #include "status_bar.h"
 #include "detail_card.h"
 #include "filters.h"
+#include "aircraft_icons.h" // legend now matches map's icon shapes -- see draw_radar_icon_legend()
 #include "display_prefs.h"
 #include "../pins_config.h"
 #include "../data/storage.h"
@@ -629,32 +630,67 @@ static void draw_radar_home_reference_elsewhere(lv_layer_t *layer) {
     lv_draw_label(layer, &lbl, &larea);
 }
 
-// Category legend -- radar had none (reported). Radar draws plain
-// color-coded square blips (draw_blips()), not map's shaped icons, so this
-// is a row of small color swatches + labels rather than a port of map's
-// draw_icon_legend() -- matches what's actually on screen here. Same 4
-// categories as map's legend (EMG isn't included there either), overlaid
-// near the bottom-left like map's, not given reserved dead space.
+// Category + altitude legend -- radar had neither (reported). User asked
+// for these to be printed the same as map's, not adapted to radar's own
+// plain-square blip style -- so this is a near-verbatim port of map_view.cpp's
+// draw_icon_legend()/draw_altitude_legend() (same icon shapes, same 6
+// altitude bands), just placed using RADAR_H, which is numerically identical
+// to map's CANVAS_H (both = LCD_V_RES - STATUS_BAR_HEIGHT).
 static void draw_radar_icon_legend(lv_layer_t *layer) {
-    int y = RADAR_H - 20;
+    int y = RADAR_H - 14;
 
-    struct { const char *label; lv_color_t color; } entries[] = {
-        {"COM",  COLOR_COMMERCIAL},
-        {"GA",   COLOR_GA_PRIVATE},
-        {"MIL",  COLOR_MILITARY},
-        {"HELI", COLOR_HELI_CAT},
+    struct { const char *label; IconType type; lv_color_t color; } entries[] = {
+        {"COM",  ICON_AIRLINER, COLOR_COMMERCIAL},
+        {"GA",   ICON_GA,       COLOR_GA_PRIVATE},
+        {"MIL",  ICON_JET,      COLOR_MILITARY},
+        {"HELI", ICON_HELI,     COLOR_HELI_CAT},
     };
 
     int x = 8;
     for (int i = 0; i < 4; i++) {
-        lv_draw_rect_dsc_t dot;
-        lv_draw_rect_dsc_init(&dot);
-        dot.bg_color = entries[i].color;
-        dot.bg_opa = LV_OPA_80;
-        dot.radius = 2;
-        lv_area_t da = {(lv_coord_t)x, (lv_coord_t)(y + 3),
-                         (lv_coord_t)(x + 8), (lv_coord_t)(y + 11)};
-        lv_draw_rect(layer, &dot, &da);
+        switch (entries[i].type) {
+            case ICON_AIRLINER: draw_icon_airliner(layer, x + 6, y + 6, 0, 1, entries[i].color, LV_OPA_80); break;
+            case ICON_JET:      draw_icon_jet(layer, x + 6, y + 6, 0, 1, entries[i].color, LV_OPA_80); break;
+            case ICON_GA:       draw_icon_ga(layer, x + 6, y + 6, 0, 1, entries[i].color, LV_OPA_80); break;
+            case ICON_HELI:     draw_icon_heli(layer, x + 6, y + 6, 0, 1, entries[i].color, LV_OPA_80); break;
+        }
+
+        lv_draw_label_dsc_t lbl;
+        lv_draw_label_dsc_init(&lbl);
+        lbl.color = entries[i].color;
+        lbl.font = &lv_font_montserrat_14;
+        lbl.opa = LV_OPA_80;
+        lbl.text = entries[i].label;
+        lv_area_t la = {(lv_coord_t)(x + 16), (lv_coord_t)(y - 1),
+                        (lv_coord_t)(x + 60), (lv_coord_t)(y + 14)};
+        lv_draw_label(layer, &lbl, &la);
+
+        x += 58;
+    }
+}
+
+static void draw_radar_altitude_legend(lv_layer_t *layer) {
+    struct { const char *label; lv_color_t color; } entries[] = {
+        {"GND",  altitude_color(0)},
+        {"<5k",  altitude_color(2500)},
+        {"<15k", altitude_color(10000)},
+        {"<25k", altitude_color(20000)},
+        {"<35k", altitude_color(30000)},
+        {"35k+", altitude_color(45000)},
+    };
+
+    int x = 8;
+    int y = RADAR_H + 6;
+
+    for (int i = 0; i < 6; i++) {
+        lv_draw_rect_dsc_t swatch;
+        lv_draw_rect_dsc_init(&swatch);
+        swatch.bg_color = entries[i].color;
+        swatch.bg_opa = LV_OPA_COVER;
+        swatch.radius = 2;
+        lv_area_t sa = {(lv_coord_t)x, (lv_coord_t)y,
+                        (lv_coord_t)(x + 8), (lv_coord_t)(y + 8)};
+        lv_draw_rect(layer, &swatch, &sa);
 
         lv_draw_label_dsc_t lbl;
         lv_draw_label_dsc_init(&lbl);
@@ -703,6 +739,7 @@ static void radar_draw_cb(lv_event_t *e) {
     draw_sweep(layer);
     draw_blips(layer);
     draw_radar_icon_legend(layer);
+    draw_radar_altitude_legend(layer);
     draw_filter_label(layer);
 }
 
