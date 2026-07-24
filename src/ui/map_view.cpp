@@ -75,8 +75,11 @@ static char _tracked_hex[7] = {};
 // without this the ring's radius is scaled to reach exactly y=0, i.e. zero
 // gap. _proj.top_margin (geo.h) shrinks the effective drawing height and
 // recenters down instead, so aircraft/rings/hit-testing (all routed through
-// to_screen()) stay consistent with each other.
-#define MAP_TOP_MARGIN 40
+// to_screen()) stay consistent with each other. geo.h's to_screen() solves
+// this so the bottom edge always lands at exactly CANVAS_H regardless of
+// this value (only the top edge moves) -- reported as still too close to
+// the status bar, bumped from 40.
+#define MAP_TOP_MARGIN 70
 
 // Per-view button/label pointers for filter buttons
 static lv_obj_t *_filter_btns[NUM_FILTERS] = {};
@@ -790,7 +793,12 @@ static void draw_altitude_legend(lv_layer_t *layer) {
     };
 
     int x = 8;
-    int y = CANVAS_H - 18;
+    // Reported as sitting too high -- there's very little room left to push
+    // this down further without the label (which extends to y+12) clipping
+    // past the canvas's true bottom edge at CANVAS_H; if it still looks too
+    // high after this, the fix is probably a more compact row (smaller
+    // font/swatch) rather than moving it further down.
+    int y = CANVAS_H - 14;
 
     for (int i = 0; i < 6; i++) {
         lv_draw_rect_dsc_t swatch;
@@ -818,7 +826,10 @@ static void draw_altitude_legend(lv_layer_t *layer) {
 
 // Draw icon type legend above altitude legend — uses category colors
 static void draw_icon_legend(lv_layer_t *layer) {
-    int y = CANVAS_H - 38;
+    // Reported as sitting too high -- shifted down 4px, same as
+    // draw_altitude_legend() below it, to keep the same gap between the two
+    // rows rather than letting them run together.
+    int y = CANVAS_H - 34;
 
     struct { const char *label; IconType type; lv_color_t color; } entries[] = {
         {"COM",  ICON_AIRLINER, COLOR_COMMERCIAL}, // matches the filter button's label (filters.cpp) -- was "AIR", inconsistent

@@ -37,13 +37,21 @@ static uint32_t _trails_cleared_at = 0;
 #define RADAR_W LCD_H_RES
 #define RADAR_H (LCD_V_RES - STATUS_BAR_HEIGHT)
 #define RADAR_CX (RADAR_W / 2)
-// Extra clearance above the compass rose so its "N" label / outer ring
-// don't touch the status bar directly above the canvas -- without this the
-// radius is scaled to reach exactly y=0 (zero gap). Shrinks the effective
-// drawing height and recenters down instead of touching the top edge.
-#define RADAR_TOP_MARGIN 24
-#define RADAR_CY (RADAR_H / 2 + RADAR_TOP_MARGIN / 2)
-#define RADAR_R ((RADAR_H - RADAR_TOP_MARGIN) / 2 - 10)  // max radius in pixels
+// Clearance above the compass rose so its "N" label / outer ring don't touch
+// the status bar directly above the canvas, and a separate (small) clearance
+// below so the outer ring doesn't touch the very bottom edge either.
+// RADAR_CY/RADAR_R are solved so the circle's top edge lands at exactly
+// RADAR_TOP_MARGIN and its bottom edge at exactly RADAR_H - RADAR_BOTTOM_MARGIN
+// -- deliberately NOT the old "shrink by TOP_MARGIN and recenter" approach,
+// which coupled the two: growing TOP_MARGIN there only made the circle
+// smaller around a fixed bottom edge (RADAR_H - 10, always, regardless of
+// TOP_MARGIN) rather than actually reclaiming the unused room below it
+// (reported: bullseye still too close to the status bar despite visible
+// empty space at the bottom of the screen).
+#define RADAR_TOP_MARGIN 60
+#define RADAR_BOTTOM_MARGIN 10
+#define RADAR_CY ((RADAR_TOP_MARGIN + (RADAR_H - RADAR_BOTTOM_MARGIN)) / 2)
+#define RADAR_R (((RADAR_H - RADAR_BOTTOM_MARGIN) - RADAR_TOP_MARGIN) / 2)
 
 #define SWEEP_PERIOD_MS 30000  // one full rotation = 30 seconds
 
@@ -621,6 +629,47 @@ static void draw_radar_home_reference_elsewhere(lv_layer_t *layer) {
     lv_draw_label(layer, &lbl, &larea);
 }
 
+// Category legend -- radar had none (reported). Radar draws plain
+// color-coded square blips (draw_blips()), not map's shaped icons, so this
+// is a row of small color swatches + labels rather than a port of map's
+// draw_icon_legend() -- matches what's actually on screen here. Same 4
+// categories as map's legend (EMG isn't included there either), overlaid
+// near the bottom-left like map's, not given reserved dead space.
+static void draw_radar_icon_legend(lv_layer_t *layer) {
+    int y = RADAR_H - 20;
+
+    struct { const char *label; lv_color_t color; } entries[] = {
+        {"COM",  COLOR_COMMERCIAL},
+        {"GA",   COLOR_GA_PRIVATE},
+        {"MIL",  COLOR_MILITARY},
+        {"HELI", COLOR_HELI_CAT},
+    };
+
+    int x = 8;
+    for (int i = 0; i < 4; i++) {
+        lv_draw_rect_dsc_t dot;
+        lv_draw_rect_dsc_init(&dot);
+        dot.bg_color = entries[i].color;
+        dot.bg_opa = LV_OPA_80;
+        dot.radius = 2;
+        lv_area_t da = {(lv_coord_t)x, (lv_coord_t)(y + 3),
+                         (lv_coord_t)(x + 8), (lv_coord_t)(y + 11)};
+        lv_draw_rect(layer, &dot, &da);
+
+        lv_draw_label_dsc_t lbl;
+        lv_draw_label_dsc_init(&lbl);
+        lbl.color = entries[i].color;
+        lbl.font = &lv_font_montserrat_14;
+        lbl.opa = LV_OPA_80;
+        lbl.text = entries[i].label;
+        lv_area_t la = {(lv_coord_t)(x + 12), (lv_coord_t)(y - 2),
+                        (lv_coord_t)(x + 60), (lv_coord_t)(y + 12)};
+        lv_draw_label(layer, &lbl, &la);
+
+        x += 58;
+    }
+}
+
 static void draw_filter_label(lv_layer_t *layer) {
     char buf[128];
     lv_color_t color;
@@ -653,6 +702,7 @@ static void radar_draw_cb(lv_event_t *e) {
     }
     draw_sweep(layer);
     draw_blips(layer);
+    draw_radar_icon_legend(layer);
     draw_filter_label(layer);
 }
 
