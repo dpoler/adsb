@@ -72,25 +72,27 @@ static char _tracked_hex[7] = {};
 
 // CANVAS_H is the canvas *object's* declared height (matches its tile
 // exactly) -- kept as-is for the object's own size, the filter-button
-// column, and overlay sizing, all of which are real LVGL layout that needs
-// the tile's actual bounds. But content drawn via this canvas's custom
-// draw callback turned out NOT to be clipped there in practice -- after
-// two rounds of "there's no room left" being reported as wrong anyway, the
-// real usable drawing height reaches much closer to the physical panel
-// height (LCD_V_RES) than CANVAS_H suggests. MAP_DRAW_H is that bigger
-// reach, used only for the projection (_proj.screen_h) and range-ring
-// math -- both must use the same value so rings and aircraft keep
-// agreeing on where a given nm distance actually plots; changing just one
-// of them would make the rings visually lie about range.
-#define MAP_DRAW_H (LCD_V_RES - 6)
-
-// Extra clearance reserved at the canvas's top edge so the outermost range
-// ring / home-marker cross don't touch the status bar directly above it.
-// _proj.top_margin (geo.h) shrinks the effective drawing height and
-// recenters down instead of touching y=0. geo.h's to_screen() solves this
-// so the bottom edge always lands at exactly MAP_DRAW_H regardless of this
-// value (only the top edge moves).
-#define MAP_TOP_MARGIN 90
+// column, and overlay sizing, all real LVGL layout that needs the tile's
+// actual bounds. Content drawn via this canvas's custom draw callback
+// reaches further than that in practice, though -- MAP_PROJ_H/MAP_TOP_MARGIN
+// below are the *measured* bounds (see project backlog: "bullseye/legend
+// centering" -- a ruler overlay + a photo of the running hardware, not
+// another guess) for the projection (_proj.screen_h) and range-ring math,
+// which must use the same values so rings and aircraft keep agreeing on
+// where a given nm distance actually plots.
+//
+// Measured (canvas-local y, i.e. 0 = right below the status bar): the
+// tileview's "swipe bar" sits at ~598, and the user wants the bullseye's
+// vertical center at ~310 (partway between ruler marks 348 and 398,
+// converted to local by subtracting STATUS_BAR_HEIGHT). Radius is fixed
+// at 252 (unchanged from the last "keep the same size" pass) --
+// MAP_PROJ_H/MAP_TOP_MARGIN below are solved backwards from
+// center=310/radius=252 through the same screen_h/top_margin formula
+// to_screen() (geo.h) already uses, rather than picked independently.
+#define MAP_BULLSEYE_R 252
+#define MAP_BULLSEYE_CY 310
+#define MAP_PROJ_H     (MAP_BULLSEYE_CY + MAP_BULLSEYE_R)  // 562
+#define MAP_TOP_MARGIN  (MAP_BULLSEYE_CY - MAP_BULLSEYE_R)  // 58
 
 // Per-view button/label pointers for filter buttons
 static lv_obj_t *_filter_btns[NUM_FILTERS] = {};
@@ -361,14 +363,16 @@ static void draw_range_rings(lv_layer_t *layer) {
     float radius_nm = range_get_nm();
     // Same effective-height/recentered-down math as to_screen() (geo.h) --
     // the rings have to line up with wherever aircraft actually plot, so
-    // this must use the same MAP_DRAW_H the projection's screen_h uses.
-    float scale = (float)(MAP_DRAW_H - _proj.top_margin) / (radius_nm * 2.0f);
+    // this must use the same _proj.screen_h/top_margin the projection uses
+    // (both set once from the measured MAP_PROJ_H/MAP_TOP_MARGIN constants
+    // at init -- fixed values now, not recomputed per frame).
+    float scale = (float)(_proj.screen_h - _proj.top_margin) / (radius_nm * 2.0f);
 
     float ring_interval = radius_nm <= 10 ? 2.0f : (radius_nm <= 25 ? 5.0f : 10.0f);
     for (float r = ring_interval; r <= radius_nm; r += ring_interval) {
         int pixel_r = (int)(r * scale);
         arc_dsc.center.x = CANVAS_W / 2 + _proj.offset_x;
-        arc_dsc.center.y = MAP_DRAW_H / 2 + _proj.top_margin / 2 + _proj.offset_y;
+        arc_dsc.center.y = _proj.screen_h / 2 + _proj.top_margin / 2 + _proj.offset_y;
         arc_dsc.radius = pixel_r;
         lv_draw_arc(layer, &arc_dsc);
     }
@@ -797,12 +801,15 @@ static void draw_aircraft(lv_layer_t *layer) {
     _list->unlock();
 }
 
-// Shared legend geometry -- both rows anchor off MAP_DRAW_H (the same
-// bigger drawable reach the range rings now use, see above), not CANVAS_H.
+// Shared legend geometry -- fixed, measured local-y positions (see
+// project backlog: "bullseye/legend centering") in the gap below the
+// bullseye's own bottom edge (MAP_PROJ_H = 562) and the measured swipe-bar
+// position (~598).
 #define LEGEND_X0 4
 #define LEGEND_W  248
-#define LEGEND_ICON_Y (MAP_DRAW_H - 34)
-#define LEGEND_ALT_Y  (MAP_DRAW_H - 14)
+#define LEGEND_ICON_Y 566
+#define LEGEND_ALT_Y  584
+#define LEGEND_BOTTOM 598
 
 // Solid backdrop behind both legend rows. Without this, an airport/runway
 // label (or an aircraft tag) that happens to render underneath reads as
@@ -817,7 +824,7 @@ static void draw_legend_backdrop(lv_layer_t *layer) {
     bg.bg_opa = LV_OPA_COVER;
     bg.radius = 6;
     lv_area_t a = {(lv_coord_t)LEGEND_X0, (lv_coord_t)(LEGEND_ICON_Y - 6),
-                   (lv_coord_t)(LEGEND_X0 + LEGEND_W), (lv_coord_t)(MAP_DRAW_H + 4)};
+                   (lv_coord_t)(LEGEND_X0 + LEGEND_W), (lv_coord_t)LEGEND_BOTTOM};
     lv_draw_rect(layer, &bg, &a);
 }
 
@@ -971,43 +978,6 @@ static void sync_active_location() {
     if (_canvas) lv_obj_invalidate(_canvas);
 }
 
-// TEMPORARY -- pixel-measurement pass for the bullseye/legend centering
-// bug (project backlog: "bullseye/legend centering, reverted"). Draws a
-// labeled 50px ruler (absolute screen Y, accounting for STATUS_BAR_HEIGHT)
-// so a single photo of the running screen can be measured against real,
-// known reference lines instead of guessing where the status bar/swipe
-// bar/bullseye/legend actually sit. Delete this whole #if block (and the
-// matching one in radar_view.cpp, and the scrollbar-mode override in
-// views.cpp) once the real fix lands from measured values.
-#define DEBUG_MEASURE_RULER 1
-#if DEBUG_MEASURE_RULER
-static void draw_debug_ruler(lv_layer_t *layer) {
-    lv_draw_line_dsc_t line;
-    lv_draw_line_dsc_init(&line);
-    line.color = lv_color_hex(0xff00ff);
-    line.width = 1;
-    line.opa = LV_OPA_70;
-
-    lv_draw_label_dsc_t lbl;
-    lv_draw_label_dsc_init(&lbl);
-    lbl.color = lv_color_hex(0xff00ff);
-    lbl.font = &lv_font_montserrat_10;
-    lbl.opa = LV_OPA_COVER;
-
-    for (int local_y = 0; local_y <= CANVAS_H; local_y += 50) {
-        line.p1 = {0, (lv_value_precise_t)local_y};
-        line.p2 = {(lv_value_precise_t)CANVAS_W, (lv_value_precise_t)local_y};
-        lv_draw_line(layer, &line);
-
-        char buf[8];
-        snprintf(buf, sizeof(buf), "%d", local_y + STATUS_BAR_HEIGHT);
-        lbl.text = buf;
-        lv_area_t a = {2, (lv_coord_t)(local_y + 2), 50, (lv_coord_t)(local_y + 14)};
-        lv_draw_label(layer, &lbl, &a);
-    }
-}
-#endif
-
 static void canvas_draw_cb(lv_event_t *e) {
     lv_layer_t *layer = lv_event_get_layer(e);
 
@@ -1030,9 +1000,6 @@ static void canvas_draw_cb(lv_event_t *e) {
     draw_icon_legend(layer);
     draw_altitude_legend(layer);
     draw_filter_label(layer);
-#if DEBUG_MEASURE_RULER
-    draw_debug_ruler(layer);
-#endif
 }
 
 void map_view_init(lv_obj_t *parent, AircraftList *list) {
@@ -1043,7 +1010,7 @@ void map_view_init(lv_obj_t *parent, AircraftList *list) {
     _proj.center_lon = g_config.home_lon;
     _proj.radius_nm = range_get_nm();
     _proj.screen_w = CANVAS_W;
-    _proj.screen_h = MAP_DRAW_H;
+    _proj.screen_h = MAP_PROJ_H;
     _proj.top_margin = MAP_TOP_MARGIN;
     _proj.offset_x = 0;
     _proj.offset_y = 0;

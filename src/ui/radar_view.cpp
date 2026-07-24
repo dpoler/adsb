@@ -40,30 +40,23 @@ static uint32_t _trails_cleared_at = 0;
 #define RADAR_CX (RADAR_W / 2)
 // RADAR_H is the canvas *object's* declared height (matches its tile) --
 // kept as-is for the object's own size and the filter-button column, which
-// are real LVGL layout needing the tile's actual bounds. But content drawn
-// via this canvas's custom draw callback turned out NOT to be clipped
-// there in practice -- after two rounds of "no room left" being reported
-// as wrong anyway, the real usable drawing height reaches much closer to
-// the physical panel height (LCD_V_RES) than RADAR_H suggests.
-// RADAR_DRAW_H is that bigger reach. Note this affects aircraft position
-// too, not just the compass -- to_radar_screen() (used for both) derives
-// its scale from RADAR_R/RADAR_CY directly, unlike map_view.cpp where the
-// rings and _proj.screen_h are separate; keeping them unified here is
-// necessary so the rings don't visually lie about where a given range
-// actually plots. Possible side effect worth watching for on hardware:
-// aircraft very near the reclaimed outer edge may render past where
-// LVGL's own touch hit-testing still considers "on the canvas object"
-// (which is still sized to RADAR_H), even though they're visible.
-#define RADAR_DRAW_H (LCD_V_RES - 6)
-// Clearance above the compass rose so its "N" label / outer ring don't touch
-// the status bar directly above the canvas, and a separate (small) clearance
-// below so the outer ring doesn't touch the very bottom edge either.
-// RADAR_CY/RADAR_R are solved so the circle's top edge lands at exactly
-// RADAR_TOP_MARGIN and its bottom edge at exactly RADAR_DRAW_H - RADAR_BOTTOM_MARGIN.
-#define RADAR_TOP_MARGIN 85
-#define RADAR_BOTTOM_MARGIN 6
-#define RADAR_CY ((RADAR_TOP_MARGIN + (RADAR_DRAW_H - RADAR_BOTTOM_MARGIN)) / 2)
-#define RADAR_R (((RADAR_DRAW_H - RADAR_BOTTOM_MARGIN) - RADAR_TOP_MARGIN) / 2)
+// are real LVGL layout needing the tile's actual bounds. RADAR_CY/RADAR_R
+// below are *measured* fixed values instead (see project backlog:
+// "bullseye/legend centering" -- a ruler overlay + a photo of the running
+// hardware, not another guess): the tileview's "swipe bar" sits at
+// canvas-local y~598, and the user wants the compass's vertical center at
+// ~310 (partway between ruler marks 348 and 398, converted to local by
+// subtracting STATUS_BAR_HEIGHT). Radius is fixed at 251 (unchanged from
+// the last "keep the same size" pass). Same fixed center as map_view.cpp
+// so both screens actually match -- previously each computed its own
+// slightly different position from separate margin math.
+//
+// Note this affects aircraft position too, not just the compass --
+// to_radar_screen() (used for both) derives its scale from RADAR_R/RADAR_CY
+// directly, unlike map_view.cpp where the rings and _proj.screen_h are
+// separate.
+#define RADAR_CY 310
+#define RADAR_R  251
 
 #define SWEEP_PERIOD_MS 30000  // one full rotation = 30 seconds
 
@@ -648,11 +641,13 @@ static void draw_radar_home_reference_elsewhere(lv_layer_t *layer) {
 // for these to be printed the same as map's, not adapted to radar's own
 // plain-square blip style -- so this is a near-verbatim port of map_view.cpp's
 // draw_icon_legend()/draw_altitude_legend() (same icon shapes, same 6
-// altitude bands), anchored off RADAR_DRAW_H like the compass now is.
+// altitude bands), using the same measured, fixed local-y positions as
+// map_view.cpp (see project backlog: "bullseye/legend centering").
 #define LEGEND_X0 4
 #define LEGEND_W  248
-#define LEGEND_ICON_Y (RADAR_DRAW_H - 34)
-#define LEGEND_ALT_Y  (RADAR_DRAW_H - 14)
+#define LEGEND_ICON_Y 566
+#define LEGEND_ALT_Y  584
+#define LEGEND_BOTTOM 598
 
 // Solid backdrop behind both legend rows -- see map_view.cpp's
 // draw_legend_backdrop() for the full rationale (an airport/aircraft label
@@ -664,7 +659,7 @@ static void draw_radar_legend_backdrop(lv_layer_t *layer) {
     bg.bg_opa = LV_OPA_COVER;
     bg.radius = 6;
     lv_area_t a = {(lv_coord_t)LEGEND_X0, (lv_coord_t)(LEGEND_ICON_Y - 6),
-                   (lv_coord_t)(LEGEND_X0 + LEGEND_W), (lv_coord_t)(RADAR_DRAW_H + 4)};
+                   (lv_coord_t)(LEGEND_X0 + LEGEND_W), (lv_coord_t)LEGEND_BOTTOM};
     lv_draw_rect(layer, &bg, &a);
 }
 
@@ -754,38 +749,6 @@ static void draw_filter_label(lv_layer_t *layer) {
     lv_draw_label(layer, &lbl, &la);
 }
 
-// TEMPORARY -- see map_view.cpp's draw_debug_ruler() for the full
-// rationale. Delete alongside that one and the scrollbar-mode override in
-// views.cpp once the real centering fix lands from measured values.
-#define DEBUG_MEASURE_RULER 1
-#if DEBUG_MEASURE_RULER
-static void draw_debug_ruler(lv_layer_t *layer) {
-    lv_draw_line_dsc_t line;
-    lv_draw_line_dsc_init(&line);
-    line.color = lv_color_hex(0xff00ff);
-    line.width = 1;
-    line.opa = LV_OPA_70;
-
-    lv_draw_label_dsc_t lbl;
-    lv_draw_label_dsc_init(&lbl);
-    lbl.color = lv_color_hex(0xff00ff);
-    lbl.font = &lv_font_montserrat_10;
-    lbl.opa = LV_OPA_COVER;
-
-    for (int local_y = 0; local_y <= RADAR_H; local_y += 50) {
-        line.p1 = {0, (lv_value_precise_t)local_y};
-        line.p2 = {(lv_value_precise_t)RADAR_W, (lv_value_precise_t)local_y};
-        lv_draw_line(layer, &line);
-
-        char buf[8];
-        snprintf(buf, sizeof(buf), "%d", local_y + STATUS_BAR_HEIGHT);
-        lbl.text = buf;
-        lv_area_t a = {2, (lv_coord_t)(local_y + 2), 50, (lv_coord_t)(local_y + 14)};
-        lv_draw_label(layer, &lbl, &a);
-    }
-}
-#endif
-
 static void radar_draw_cb(lv_event_t *e) {
     lv_layer_t *layer = lv_event_get_layer(e);
     draw_rings(layer);
@@ -806,9 +769,6 @@ static void radar_draw_cb(lv_event_t *e) {
     draw_radar_icon_legend(layer);
     draw_radar_altitude_legend(layer);
     draw_filter_label(layer);
-#if DEBUG_MEASURE_RULER
-    draw_debug_ruler(layer);
-#endif
 }
 
 static void update_filter_visuals() {
