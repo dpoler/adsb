@@ -821,7 +821,7 @@ static void draw_icon_legend(lv_layer_t *layer) {
     int y = CANVAS_H - 38;
 
     struct { const char *label; IconType type; lv_color_t color; } entries[] = {
-        {"AIR",  ICON_AIRLINER, COLOR_COMMERCIAL},
+        {"COM",  ICON_AIRLINER, COLOR_COMMERCIAL}, // matches the filter button's label (filters.cpp) -- was "AIR", inconsistent
         {"GA",   ICON_GA,       COLOR_GA_PRIVATE},
         {"MIL",  ICON_JET,      COLOR_MILITARY},
         {"HELI", ICON_HELI,     COLOR_HELI_CAT},
