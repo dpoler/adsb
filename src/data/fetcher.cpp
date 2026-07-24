@@ -60,26 +60,51 @@ static bool wifi_connect_with_timeout(uint32_t timeout_ms) {
     Serial.printf("WiFi connecting to '%s'...\n", g_config.wifi_ssid);
     WiFi.begin(g_config.wifi_ssid, g_config.wifi_pass);
 
+    auto reason_for = [](wl_status_t s) -> const char * {
+        // WL_CONNECT_FAILED does NOT mean "wrong password" specifically --
+        // it's the generic auth/handshake-failed status, and empirically
+        // fires reliably on the very first connect attempt right after a
+        // fresh C6 reset, then succeeds on the next attempt seconds later
+        // with the same unchanged credentials. Mislabeling it "wrong
+        // password" sent a wrong signal here once already -- don't repeat
+        // that. A *persistent* WL_CONNECT_FAILED across retries is still
+        // worth checking the password for; a single one right after reset
+        // isn't evidence of that on its own.
+        return s == WL_NO_SSID_AVAIL  ? "SSID not found" :
+               s == WL_CONNECT_FAILED ? "auth/handshake failed (often transient right after a C6 reset)" :
+               s == WL_CONNECTION_LOST? "connection lost" :
+               s == WL_DISCONNECTED   ? "disconnected (bad pw, DHCP, or AP out of range?)" : "unknown";
+    };
+
     uint32_t start = millis();
+    int last_logged = -1; // sentinel -- wl_status_t is always a non-negative byte value
     while (WiFi.status() != WL_CONNECTED) {
+        wl_status_t s = WiFi.status();
+        // Log every status *change* (not every 500ms tick) -- previously
+        // this loop never looked at status at all until the outer timeout
+        // fired, so there was no way to tell whether a terminal failure
+        // showed up seconds in (and we then sat out the rest of the timeout
+        // pointlessly) or only right at the deadline (meaning the C6/IDF
+        // driver itself is what's actually slow here). This settles that
+        // question either way, without changing behavior yet.
+        if ((int)s != last_logged) {
+            Serial.printf("\n  [WiFi] status -> %d at %lums\n", (int)s, (unsigned long)(millis() - start));
+            last_logged = (int)s;
+        }
+        // Bail out the moment the driver reports a *terminal* failure rather
+        // than sitting out the rest of timeout_ms regardless -- WL_CONNECT_FAILED
+        // and WL_NO_SSID_AVAIL only ever get set once the connect attempt is
+        // actually done and failed (not a transient in-progress state), so
+        // there's nothing to wait for. The caller's retry loop can start a
+        // fresh WiFi.begin() immediately instead.
+        if (s == WL_CONNECT_FAILED || s == WL_NO_SSID_AVAIL) {
+            Serial.printf("WiFi failed fast after %lums (status %d: %s)\n",
+                (unsigned long)(millis() - start), s, reason_for(s));
+            return false;
+        }
         if (millis() - start > timeout_ms) {
-            wl_status_t s = WiFi.status();
-            // WL_CONNECT_FAILED does NOT mean "wrong password" specifically --
-            // it's the generic auth/handshake-failed status, and empirically
-            // fires reliably on the very first connect attempt right after a
-            // fresh C6 reset, then succeeds on the next attempt seconds later
-            // with the same unchanged credentials. Mislabeling it "wrong
-            // password" sent a wrong signal here once already -- don't repeat
-            // that. A *persistent* WL_CONNECT_FAILED across retries is still
-            // worth checking the password for; a single one right after reset
-            // isn't evidence of that on its own.
-            const char *reason =
-                s == WL_NO_SSID_AVAIL  ? "SSID not found" :
-                s == WL_CONNECT_FAILED ? "auth/handshake failed (often transient right after a C6 reset)" :
-                s == WL_CONNECTION_LOST? "connection lost" :
-                s == WL_DISCONNECTED   ? "disconnected (bad pw, DHCP, or AP out of range?)" : "unknown";
             Serial.printf("\nWiFi timeout after %lums (status %d: %s)\n",
-                (unsigned long)(millis() - start), s, reason);
+                (unsigned long)(millis() - start), s, reason_for(s));
             return false;
         }
         vTaskDelay(pdMS_TO_TICKS(500));
