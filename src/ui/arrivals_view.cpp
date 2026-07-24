@@ -320,12 +320,16 @@ static void update_board(lv_timer_t *t) {
         strlcpy(_rows[row].icao_hex, ac.icao_hex, sizeof(_rows[row].icao_hex));
 
         // Format each column
-        char flight[9], type[5], alt[5], spd[4], dist[5], hdg[4], status[8], fpm[8];
+        char flight[9], type[5], alt[8], spd[4], dist[5], hdg[4], status[8], fpm[8];
         snprintf(flight, sizeof(flight), "%-8s", ac.callsign[0] ? ac.callsign : ac.icao_hex);
         snprintf(type, sizeof(type), "%-4s", ac.type_code);
 
-        if (ac.on_ground) snprintf(alt, sizeof(alt), " GND");
-        else snprintf(alt, sizeof(alt), "%4d", ac.altitude / 100);
+        // Same GND/FL###/exact-feet convention as Map/Radar/detail card --
+        // this board used to always show bare hundreds-of-feet with no
+        // FL prefix or feet/FL distinction at any altitude (reported).
+        if (ac.on_ground) snprintf(alt, sizeof(alt), "GND");
+        else if (ac.altitude >= 18000) snprintf(alt, sizeof(alt), "FL%03d", ac.altitude / 100);
+        else snprintf(alt, sizeof(alt), "%d'", ac.altitude);
         snprintf(spd, sizeof(spd), "%3d", ac.speed);
 
         float dist_nm = entries[e].dist_nm;

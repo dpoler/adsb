@@ -366,10 +366,15 @@ static void draw_blips(lv_layer_t *layer) {
                 }
 
                 if (tag_data_shown()) {
+                    // Same GND/FL###/exact-feet convention as the paint-detail
+                    // zone below (and map_view.cpp, detail_card.cpp) -- this
+                    // condensed zone used to round sub-18k feet to the
+                    // nearest 100 and format FL without leading zeros,
+                    // an inconsistency with everywhere else (reported).
                     char alt_str[12];
                     if (ac.on_ground) snprintf(alt_str, sizeof(alt_str), "GND");
-                    else if (ac.altitude >= 18000) snprintf(alt_str, sizeof(alt_str), "FL%d", ac.altitude / 100);
-                    else snprintf(alt_str, sizeof(alt_str), "%d'", ac.altitude / 100 * 100);
+                    else if (ac.altitude >= 18000) snprintf(alt_str, sizeof(alt_str), "FL%03d", ac.altitude / 100);
+                    else snprintf(alt_str, sizeof(alt_str), "%d'", ac.altitude);
                     char info[24];
                     snprintf(info, sizeof(info), "%s %dkt", alt_str, ac.speed);
                     lv_draw_label_dsc_t il;
