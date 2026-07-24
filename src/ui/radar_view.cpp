@@ -642,14 +642,14 @@ static void draw_radar_home_reference_elsewhere(lv_layer_t *layer) {
 // plain-square blip style -- so this is a near-verbatim port of map_view.cpp's
 // draw_icon_legend()/draw_altitude_legend() (same icon shapes, same 6
 // altitude bands), using the same measured, fixed local-y positions as
-// map_view.cpp (see project backlog: "bullseye/legend centering"),
-// shifted up 4px from the first measured pass since the swipe bar was
-// still overlapping it.
+// map_view.cpp (see project backlog: "bullseye/legend centering"). Shifted
+// up twice now (4px, then another 8px) since the swipe bar kept
+// overlapping it.
 #define LEGEND_X0 4
 #define LEGEND_W  248
-#define LEGEND_ICON_Y 562
-#define LEGEND_ALT_Y  580
-#define LEGEND_BOTTOM 594
+#define LEGEND_ICON_Y 554
+#define LEGEND_ALT_Y  572
+#define LEGEND_BOTTOM 586
 
 // Solid backdrop behind both legend rows -- see map_view.cpp's
 // draw_legend_backdrop() for the full rationale (an airport/aircraft label
