@@ -245,6 +245,14 @@ static void build_list_view() {
     lv_obj_set_style_border_opa(_panel, LV_OPA_40, 0);
     lv_obj_set_style_radius(_panel, 8, 0);
     lv_obj_set_style_pad_all(_panel, 4, 0);
+    // The active theme's default flex row gap (never explicitly set before)
+    // was silently adding extra vertical space between rows that panel_h's
+    // rows*ROW_H math didn't know about -- rows*(ROW_H-4) plus (rows-1)
+    // unaccounted gaps overflowed the allotted height, pushing "Add airport"
+    // partway off the bottom even nowhere near max_h. Row spacing here is
+    // already fully expressed by each row's own height (ROW_H-4) vs. its
+    // ROW_H-sized slot, so the actual flex gap needs to be exactly 0.
+    lv_obj_set_style_pad_row(_panel, 0, 0);
     lv_obj_set_flex_flow(_panel, LV_FLEX_FLOW_COLUMN);
 
     // Home row
