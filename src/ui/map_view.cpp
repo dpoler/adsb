@@ -79,7 +79,11 @@ static char _tracked_hex[7] = {};
 // this so the bottom edge always lands at exactly CANVAS_H regardless of
 // this value (only the top edge moves) -- reported as still too close to
 // the status bar, bumped from 40.
-#define MAP_TOP_MARGIN 70
+// Trimmed back a bit (70 -> 50) at the user's request to make better use of
+// the display -- confirmed the status-bar clearance itself was fine, this
+// just grows the rings' effective radius modestly (bottom edge still pinned
+// at exactly CANVAS_H regardless of this value, per to_screen() in geo.h).
+#define MAP_TOP_MARGIN 50
 
 // Per-view button/label pointers for filter buttons
 static lv_obj_t *_filter_btns[NUM_FILTERS] = {};
@@ -654,10 +658,16 @@ static void draw_aircraft(lv_layer_t *layer) {
         int sx, sy;
         if (!_proj.to_screen(ac.lat, ac.lon, sx, sy)) continue;
 
-        // Category color for the aircraft icon
+        // Category color for the aircraft icon -- on_ground overrides category
+        // color to gray (altitude_color(0), matching the "GND" legend swatch)
+        // since ground state is more relevant to convey here than an
+        // otherwise-airliner-shaped callsign showing airline blue while
+        // sitting on a taxiway. Emergency still wins over that -- a ground
+        // aircraft squawking 7500/7600/7700 is still worth flagging red.
         IconType icon = classify_icon(ac);
         lv_color_t color;
         if (ac.is_emergency)       color = COLOR_EMERGENCY;
+        else if (ac.on_ground)     color = altitude_color(0);
         else if (ac.is_military)   color = COLOR_MILITARY;
         else if (icon == ICON_HELI) color = COLOR_HELI_CAT;
         else if (icon == ICON_GA)  color = COLOR_GA_PRIVATE;

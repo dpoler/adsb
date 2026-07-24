@@ -49,8 +49,11 @@ static uint32_t _trails_cleared_at = 0;
 // TOP_MARGIN) rather than actually reclaiming the unused room below it
 // (reported: bullseye still too close to the status bar despite visible
 // empty space at the bottom of the screen).
-#define RADAR_TOP_MARGIN 60
-#define RADAR_BOTTOM_MARGIN 10
+// Trimmed back a bit at the user's request to make better use of the
+// display -- confirmed the status-bar clearance itself was fine, this just
+// grows the compass's effective radius modestly.
+#define RADAR_TOP_MARGIN 45
+#define RADAR_BOTTOM_MARGIN 6
 #define RADAR_CY ((RADAR_TOP_MARGIN + (RADAR_H - RADAR_BOTTOM_MARGIN)) / 2)
 #define RADAR_R (((RADAR_H - RADAR_BOTTOM_MARGIN) - RADAR_TOP_MARGIN) / 2)
 
@@ -223,9 +226,12 @@ static void draw_blips(lv_layer_t *layer) {
         // Combine sweep brightness with ghost fade (stale aircraft fade out)
         uint8_t opa = (uint8_t)((sweep_opa * ghost_opa) / 255);
 
-        // Category color for blip
+        // Category color for blip -- on_ground overrides to gray
+        // (altitude_color(0), matching the "GND" legend swatch) same as
+        // map_view.cpp; emergency still wins over that.
         lv_color_t color;
         if (ac.is_emergency)  color = COLOR_EMERGENCY;
+        else if (ac.on_ground)     color = altitude_color(0);
         else if (ac.is_military)   color = COLOR_MILITARY;
         else if ((ac.category[0] == 'A' && ac.category[1] == '7') ||
                  (ac.type_code[0] && is_heli_type(ac.type_code)))
