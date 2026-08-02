@@ -46,4 +46,41 @@ via `__has_include`, so the firmware builds fine with or without them):
 ### Do not
 - Do not bump the `platform =` version in `platformio.ini` (see the extensive
   comment there re: ESP-Hosted/C6 firmware pairing and the `sdio_rx_get_buffer`
-  crash). It's pinned deliberately.
+  crash). It's pinned deliberately. `55.03.37` / ESP-Hosted `2.11.6` (host +
+  C6 matched) is the only confirmed-stable pairing; `55.03.39` / `2.12.8` was
+  tried matched and was worse.
+
+### Standing preferences (from project memories)
+These override default agent habits for this repo:
+- **User handles builds.** Do **not** run `pio run` to verify firmware changes.
+  Write the code and stop. Note compile concerns in text if needed; Dan builds
+  on the board himself. (Exception: environment-setup / first-boot tooling
+  checks may still run a build to prove the toolchain works.)
+- **No Claude / AI attribution in commits.** Never add `Co-Authored-By: Claude`
+  (or similar) trailers. Treat this as a hard checklist item on every commit.
+- **Justify, don't default.** When carrying a tool/library/pattern into new
+  work (new board, new platform, simulator, etc.), state why it fits *this*
+  context's constraints — not just "it's already used elsewhere."
+- **Prefer explicit commit permission** for ordinary interactive work. Make
+  changes, then wait to be told to commit/push. Cloud Agent PR/setup workflows
+  that require commits still apply when that is the assigned task.
+
+### Hard architectural constraints (from project memories)
+- **`jc1060` only.** CrowPanel / waveshare / S3 / CYD targets were removed;
+  don't resurrect board-target scaffolding unless Dan asks.
+- **No new FreeRTOS tasks for network work** on this board (permanent or
+  one-shot). Piggyback on an existing task via request/poll/result; keep HTTP
+  serialized through `http_mutex`. New task stacks compete with ESP-Hosted
+  SDIO for scarce internal DRAM and have crashed with
+  `assert failed: sdio_rx_get_buffer`.
+- **Map ≠ Radar visibility.** Map intentionally draws/taps aircraft past the
+  bullseye out to the rectangular canvas; Radar intentionally clips to a
+  circle. Do not "fix" either to match the other.
+- **No origin/destination / route display.** Removed on purpose; adsb.lol and
+  adsbdb.com share unreliable VRS standing-data route tables. Don't bring it
+  back.
+- **LVGL delete-from-handler:** use `lv_obj_delete_async()` when deleting an
+  object (or ancestor) from inside its own event handler.
+- **Large stack locals off `loopTask`:** anything reachable from LVGL
+  draw/timer callbacks runs on Arduino's ~8KB `loopTask` stack — big arrays
+  must be `static`/heap, not stack-local.
