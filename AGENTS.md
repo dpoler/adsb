@@ -56,8 +56,12 @@ These override default agent habits for this repo:
   Write the code and stop. Note compile concerns in text if needed; Dan builds
   on the board himself. (Exception: environment-setup / first-boot tooling
   checks may still run a build to prove the toolchain works.)
-- **No Claude / AI attribution in commits.** Never add `Co-Authored-By: Claude`
-  (or similar) trailers. Treat this as a hard checklist item on every commit.
+- **No `Co-authored-by` trailers in commits.** Never. Includes Claude *and*
+  any other auto-injected trailer. Cursor Cloud's default
+  `commit-msg.cursor.co-author` hook appends `Co-authored-by: dpoler <...>`;
+  for this repo that hook must stay disabled/no-op (rewrite it under
+  `~/.cursor/agent-hooks/*/commit-msg.cursor.co-author` if a fresh VM
+  reintroduces it). Verify with `git log -1 --format='%B'` before pushing.
 - **Justify, don't default.** When carrying a tool/library/pattern into new
   work (new board, new platform, simulator, etc.), state why it fits *this*
   context's constraints — not just "it's already used elsewhere."
