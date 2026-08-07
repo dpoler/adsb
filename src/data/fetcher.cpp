@@ -8,6 +8,7 @@
 #include "../data/enrichment.h"
 #include "../data/ota.h"
 #include "../data/metar.h"
+#include "../data/atis.h"
 #include "../ui/alerts.h"
 #if defined(USE_ETHERNET)
 #include <ETH.h>
@@ -733,6 +734,7 @@ static void location_poll_task(void *param) {
         enrichment_poll(); // detail-card aircraft/photo lookups -- see enrichment.cpp
         ota_poll(); // application-firmware update check/download -- see ota.cpp. Near-instant unless a check/update was actually requested (rare, user-triggered), in which case this tick runs long -- acceptable, see ota.h's comment.
         metar_poll(); // nearest-station weather readout -- see metar.h. Internally rate-limited (active-location change or every 10min), near-instant otherwise.
+        atis_poll();  // D-ATIS for active airport ICAO -- see atis.h. Stub on ESP32 until WiFi port.
         vTaskDelay(pdMS_TO_TICKS(1500));
     }
 }

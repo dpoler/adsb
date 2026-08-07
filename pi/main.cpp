@@ -8,6 +8,8 @@
 #include "../src/data/locations.h"
 #include "../src/data/airlines.h"
 #include "../src/data/enrichment.h"
+#include "../src/data/metar.h"
+#include "../src/data/atis.h"
 #include "../src/ui/views.h"
 #include "../src/ui/detail_card.h"
 #include "../src/ui/range.h"
@@ -56,6 +58,10 @@ static void fetch_loop() {
         pi_fetcher_stats_update(ok, elapsed);
         platform_log("Fetch (%s): %s, %d aircraft tracked (%ums)\n",
                       src.name(), ok ? "OK" : "FAILED", aircraft_list.count, elapsed);
+        // Same cadence as ESP32 location_poll_task: METAR/ATIS are
+        // internally rate-limited (loc change or every few minutes).
+        metar_poll();
+        atis_poll();
         // Waits up to 20s, but returns immediately if
         // fetcher_request_immediate_fetch() is called in the meantime
         // (locations_set_active() calls it on every location switch).

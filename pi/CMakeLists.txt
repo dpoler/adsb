@@ -122,6 +122,8 @@ add_executable(adsb_pi
     platform_linux/locations_linux.cpp
     platform_linux/airlines_linux.cpp
     platform_linux/enrichment_linux.cpp
+    platform_linux/metar_linux.cpp
+    platform_linux/atis_linux.cpp
     ${SHARED_SOURCES}
 )
 target_include_directories(adsb_pi PRIVATE
