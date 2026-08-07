@@ -6,7 +6,10 @@
 #include "../pins_config.h"
 #include "../data/locations.h"
 #include "../data/metar.h"
+#include "../data/atis.h"
 #include "geo.h" // altitude_color()
+#include <cstdio>
+#include <cstring>
 
 #define STATS_W LCD_H_RES
 #define STATS_H (LCD_V_RES - STATUS_BAR_HEIGHT)
@@ -23,6 +26,10 @@ static AircraftList *_list = nullptr;      // the one aircraft list -- fetch_tas
 static lv_obj_t *_container = nullptr;
 static lv_obj_t *_traffic_total_lbl = nullptr; // "Total: N" caption under CURRENT TRAFFIC
 static lv_obj_t *_metar_lbl = nullptr; // nearest-station METAR readout, top band (see metar.h)
+#if LCD_H_RES >= 1280
+static lv_obj_t *_atis_panel = nullptr; // scrollable D-ATIS column (right)
+static lv_obj_t *_atis_lbl = nullptr;
+#endif
 
 // Category rows
 struct BarRow {
@@ -194,6 +201,55 @@ static void refresh_stats(lv_timer_t *t) {
                 break;
         }
     }
+
+#if LCD_H_RES >= 1280
+    // D-ATIS column — blank on location change; keep last text through
+    // transient FETCHING/ERROR for the same airport (same as METAR).
+    static int _atis_last_loc = -2;
+    int atis_loc = locations_active_index();
+    if (atis_loc != _atis_last_loc) {
+        _atis_last_loc = atis_loc;
+        if (_atis_lbl) lv_label_set_text(_atis_lbl, "");
+    } else if (_atis_lbl) {
+        switch (atis_status) {
+            case ATIS_OK: {
+                // Build ARR/DEP or combined text. Buffer sized for two
+                // reports + headers (atis texts are up to ~1.6KB each).
+                static char buf[ATIS_MAX_REPORTS * (ATIS_TEXT_LEN + 48)];
+                buf[0] = '\0';
+                size_t used = 0;
+                for (int i = 0; i < atis_report_count && i < ATIS_MAX_REPORTS; i++) {
+                    const char *hdr = "ATIS";
+                    if (strcmp(atis_reports[i].type, "arr") == 0) hdr = "ARR ATIS";
+                    else if (strcmp(atis_reports[i].type, "dep") == 0) hdr = "DEP ATIS";
+                    int n = snprintf(buf + used, sizeof(buf) - used,
+                                     "%s%s %s%s\n%s",
+                                     (used > 0) ? "\n\n" : "",
+                                     hdr,
+                                     atis_reports[i].code[0] ? "INFO " : "",
+                                     atis_reports[i].code,
+                                     atis_reports[i].text);
+                    if (n < 0) break;
+                    used += (size_t)n;
+                    if (used >= sizeof(buf)) break;
+                }
+                lv_label_set_text(_atis_lbl, buf);
+                lv_obj_set_style_text_color(_atis_lbl, DIM_COLOR, 0);
+                break;
+            }
+            case ATIS_NONE:
+                lv_label_set_text(_atis_lbl, "NO D-ATIS");
+                lv_obj_set_style_text_color(_atis_lbl, lv_color_hex(0x666688), 0);
+                break;
+            case ATIS_IDLE:
+                lv_label_set_text(_atis_lbl, "");
+                break;
+            case ATIS_FETCHING:
+            case ATIS_ERROR:
+                break;
+        }
+    }
+#endif
 
     lv_label_set_text_fmt(_traffic_total_lbl, "Total: %d", s->current_count);
 
@@ -508,6 +564,48 @@ void stats_view_init(lv_obj_t *parent, AircraftList *list) {
         lv_obj_set_pos(_type_labels[i], cx + (i % 3) * 100, ty_y + ROW_H + (i / 3) * ROW_H);
         lv_obj_clear_flag(_type_labels[i], LV_OBJ_FLAG_CLICKABLE);
     }
+
+#if LCD_H_RES >= 1280
+    // ============================================================
+    // FAR-RIGHT COLUMN: D-ATIS for the active airport (datis.clowd.io).
+    // Scrollable — ATIS text is often longer than the panel. Separate
+    // ARR/DEP reports (e.g. KDEN) are stacked with headers.
+    // ============================================================
+    {
+        const int ax = 880;
+        const int atis_w = STATS_W - ax - 24;
+        const int atis_h = STATS_H - top_y - 16;
+
+        lv_obj_t *atis_header = lv_label_create(_container);
+        lv_label_set_text(atis_header, "ATIS");
+        lv_obj_set_style_text_font(atis_header, &lv_font_montserrat_20, 0);
+        lv_obj_set_style_text_color(atis_header, ACCENT_COLOR, 0);
+        lv_obj_set_pos(atis_header, ax, top_y);
+        lv_obj_clear_flag(atis_header, LV_OBJ_FLAG_CLICKABLE);
+
+        _atis_panel = lv_obj_create(_container);
+        lv_obj_set_size(_atis_panel, atis_w, atis_h - 28);
+        lv_obj_set_pos(_atis_panel, ax, top_y + 28);
+        lv_obj_set_style_bg_opa(_atis_panel, LV_OPA_TRANSP, 0);
+        lv_obj_set_style_border_width(_atis_panel, 0, 0);
+        lv_obj_set_style_pad_all(_atis_panel, 0, 0);
+        lv_obj_set_style_radius(_atis_panel, 0, 0);
+        lv_obj_set_scroll_dir(_atis_panel, LV_DIR_VER);
+        lv_obj_add_flag(_atis_panel, LV_OBJ_FLAG_SCROLLABLE);
+        // Keep vertical ATIS scroll from stealing the tileview swipe.
+        lv_obj_clear_flag(_atis_panel, LV_OBJ_FLAG_SCROLL_CHAIN);
+        lv_obj_set_scrollbar_mode(_atis_panel, LV_SCROLLBAR_MODE_AUTO);
+
+        _atis_lbl = lv_label_create(_atis_panel);
+        lv_label_set_text(_atis_lbl, "");
+        lv_label_set_long_mode(_atis_lbl, LV_LABEL_LONG_WRAP);
+        lv_obj_set_width(_atis_lbl, atis_w - 4);
+        lv_obj_set_style_text_font(_atis_lbl, &lv_font_montserrat_14, 0);
+        lv_obj_set_style_text_color(_atis_lbl, DIM_COLOR, 0);
+        lv_obj_set_pos(_atis_lbl, 0, 0);
+        lv_obj_clear_flag(_atis_lbl, LV_OBJ_FLAG_CLICKABLE);
+    }
+#endif
 
     // Refresh timer -- stats_update() just reads whatever is currently in
     // the live aircraft list, so polling it more often than the ~20s fetch

@@ -24,7 +24,7 @@ enum MetarStatus {
 };
 
 extern volatile MetarStatus metar_status;
-extern char metar_raw[128];   // winning station's raw METAR text, verbatim
+extern char metar_raw[192];   // winning station's raw METAR text, verbatim
 extern char metar_station[8]; // which ICAO metar_raw actually came from (may differ from the active location's own ICAO)
 
 void metar_poll();

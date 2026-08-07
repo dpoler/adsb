@@ -15,7 +15,8 @@ system (add/remove/reorder, ICAO or plain lat/lon), and a scoped-down
 Settings screen. Real DSI hardware bring-up (DRM/KMS + libinput) is
 confirmed working against physical hardware (Pi 3B+, Waveshare 10.1"
 panel) — touch, swipe, and the full network fetch/render loop all
-verified. Not yet ported: metar. Airline names load from
+verified. METAR (aviationweather.gov) and D-ATIS (datis.clowd.io) feed the
+INFO screen. Airline names load from
 dpoler/AirlinesCSV at app start; detail-card enrichment (adsbdb +
 planespotters photos) is live on Pi. No on-device way
 to set the airportdb.io token yet (ESP32's USB-serial `TOKEN=` mechanism

@@ -34,7 +34,7 @@
 #define METAR_RANGE_NM 20.0f
 
 volatile MetarStatus metar_status = METAR_IDLE;
-char metar_raw[128] = "";
+char metar_raw[192] = "";
 char metar_station[8] = "";
 
 // PSRAM allocator for ArduinoJson -- same pattern as fetcher.cpp/
