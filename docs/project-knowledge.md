@@ -338,7 +338,7 @@ detail card. See backlog §7 for full scope.
 
 ---
 
-## 7. Full backlog (as of 2026-08-06/07)
+## 7. Full backlog (as of 2026-08-08)
 
 This preserves essentially the full detail of every backlog entry — done items
 are kept for their debugging trail/rationale (useful history), open items are
@@ -346,6 +346,58 @@ what's actually outstanding. Grouped roughly by theme; original memory file is
 mostly chronological.
 
 ### 7.1 Genuinely open / not started
+
+- **Detail card photo credit appears before the photo**: photographer credit
+  text can pop into the summary/detail area before the aircraft photo has
+  finished loading (or when the image path fails / is still decoding). Credit
+  should stay hidden until pixels are actually shown, or sit only under the
+  photo slot. **Do not start until explicitly asked** — reported 2026-08-08.
+
+- **Location switch: successful fetch but empty Map for a couple of refreshes**:
+  switching active location from Heathrow (EGLL) to Denver, `adsb.lol`
+  appeared to fetch successfully but no aircraft rendered for a couple of
+  refresh cycles afterward. Possible stale list / range filter / projection
+  center race, or a brief empty payload accepted as OK before the new
+  location's traffic arrives. Repro and root-cause not done. **Do not start
+  until explicitly asked** — reported 2026-08-08.
+
+- **Basemap / sectional coverage outside the US (esp. UK)**: FAA VFR
+  sectional style is US-charting only — expected empty/useless for UK and
+  other non-US regions; either gate the style by geography or label it
+  US-only in the VIEW menu. Separately, at EGLL (~51.47N) with dark_nolabels
+  @ 10 nm the basemap worker aborts: `tile AABB too large (25x18 at z=13)`
+  (`pi/basemap.cpp` guard `tiles_w * tiles_h > 300`) after cache TTL expiry,
+  so the map never rebuilds. Mercator AABB vs equirectangular canvas grows
+  with latitude; need a zoom/AABB fix and a pass verifying **all** basemap
+  styles at representative worldwide locations (low / mid / high lat, both
+  hemispheres). **Do not start until explicitly asked** — reported
+  2026-08-08.
+
+- **Include small airports in the static on-device airport DB**: today's
+  `tools/generate_airports_db.py` keeps only OurAirports `large_airport` +
+  `medium_airport` (~5k entries, ~0.4 MB const with `name[64]`). Adding
+  `small_airport` (ident ≤4, same filter) is ~+25.6k rows → ~30.6k total and
+  ~2.5 MB aligned const flash (~+2.1 MB). Header text scales similarly
+  (~0.35 → ~2.1 MB). Fine on Pi; painful if the same table stays shared with
+  ESP32. **Do not start until explicitly asked** — sized 2026-08-08.
+
+- **Fork the Pi port into its own project/repo**: Pi-specific surface area
+  (basemap/weather, SDL/DRM, AeroDataBox O/D, AirportDB, settings, photo
+  path, CMake) has diverged enough that sharing `src/ui` + `src/data` with
+  the jc1060 ESP32 tree is getting costly. Plan a clean fork (or extract)
+  so Pi can evolve without `#if !defined(ARDUINO)` / dual-target friction.
+  **Do not start until explicitly asked** — parked 2026-08-08.
+
+- **Pi online app updates (check / notify / pull / restart)**: periodically
+  check whether a newer `adsb_pi` (or package) is available, surface a
+  non-intrusive "update available" notice in the UI, download it, and restart
+  into the new build. Not designed — open questions include update source
+  (GitHub Releases vs self-hosted URL vs apt), signature/verification,
+  whether the kiosk systemd unit should own the swap, and how aggressive the
+  check cadence should be on a wall-mounted always-on display. Related to the
+  Settings "Device" column / "Check for Update" idea below, but that entry was
+  framed around ESP32 OTA; this is the Pi-native equivalent. **Do not start
+  until explicitly asked** — parked 2026-08-08 so it isn't forgotten.
 
 - **planespotters.net photo fetch — dead on jc1060, revive for Pi**: PSRAM
   cache-coherency erratum on jc1060 corrupts image data (a genuine hardware

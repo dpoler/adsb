@@ -195,7 +195,9 @@ void enrichment_poll() {
 }
 
 void enrichment_fetch(const char *icao_hex, const char *registration,
+                      const char *callsign,
                       void (*callback)(AircraftEnrichment *data)) {
+    (void)callsign; // AeroDataBox O/D is Pi-only for now
     // Check cache first
     AircraftEnrichment *cached = enrichment_get_cached(icao_hex);
     if (cached) {

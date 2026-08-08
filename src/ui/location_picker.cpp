@@ -5,15 +5,19 @@
 #include "../pins_config.h"
 #include "status_bar.h"
 #include "view_menu.h"
+#include "airports_lookup.h"
 #include "../platform/platform.h"
 #include <cstring>
 #include <cctype>
 #include <cstdio> // snprintf -- not reliably transitive under libstdc++ (Pi build)
 
-#define PANEL_W    320
+// Wide enough for "KJFK  John F. Kennedy International" + icon cluster.
+#define PANEL_W    540
 #define ROW_H      56   // was 44 -- felt cramped once the reorder handle was added (reported)
+#define ROW_ICON_RESERVE 110 // eye + grip + close on the right
 #define BTN_W      60   // matches status_bar.cpp's CHIP_W -- same width as every other button in the bar (nav tabs, range/TRAIL/TAG chips)
 #define BTN_H      24   // matches status_bar.cpp's CHIP_H (and the nav tabs' own height)
+#define ADD_MATCH_MAX 5
 
 #define COLOR_BG        lv_color_hex(0x0d0d1a)
 #define COLOR_PANEL     lv_color_hex(0x14142a)
@@ -38,6 +42,10 @@ static bool _add_in_progress = false;
 static lv_obj_t *_add_status_lbl = nullptr;
 static lv_obj_t *_add_fetch_btn = nullptr;
 static lv_obj_t *_add_ta = nullptr;
+static lv_obj_t *_add_hint_lbl = nullptr;
+static lv_obj_t *_add_match_btns[ADD_MATCH_MAX] = {};
+static const StaticAirport *_add_match_ptrs[ADD_MATCH_MAX] = {};
+static int _add_match_count = 0;
 
 // "Add Location" (waypoint) view widgets -- separate from the ICAO add-flow
 // ones above since both can't be open at once but build_list_view()/
@@ -77,6 +85,12 @@ static void close_overlay() {
         _add_status_lbl = nullptr;
         _add_fetch_btn = nullptr;
         _add_ta = nullptr;
+        _add_hint_lbl = nullptr;
+        _add_match_count = 0;
+        for (int i = 0; i < ADD_MATCH_MAX; i++) {
+            _add_match_btns[i] = nullptr;
+            _add_match_ptrs[i] = nullptr;
+        }
         _wp_name_ta = nullptr;
         _wp_lat_ta = nullptr;
         _wp_lon_ta = nullptr;
@@ -164,17 +178,16 @@ static void add_nearby_toggle(lv_obj_t *row, int idx) {
     lv_obj_set_ext_click_area(eye, 10);
     lv_obj_add_event_cb(eye, nearby_toggle_click_cb, LV_EVENT_CLICKED, (void *)(intptr_t)idx);
 
-    // Only shown once a fetch has actually landed something -- confirms the
-    // cache worked without needing to switch to Map/Radar and look.
+    // Second line under the ICAO/name — never overlaid on the primary label.
     int count = locations_nearby_count(idx);
     if (locations_nearby_enabled(idx) && count > 0) {
         lv_obj_t *badge = lv_label_create(row);
-        char txt[20];
+        char txt[24];
         snprintf(txt, sizeof(txt), "+%d nearby", count);
         lv_label_set_text(badge, txt);
         lv_obj_set_style_text_font(badge, &lv_font_montserrat_10, 0);
         lv_obj_set_style_text_color(badge, COLOR_ACCENT, 0);
-        lv_obj_align(badge, LV_ALIGN_LEFT_MID, 66, 0);
+        lv_obj_align(badge, LV_ALIGN_BOTTOM_LEFT, 10, -6);
         lv_obj_clear_flag(badge, LV_OBJ_FLAG_CLICKABLE);
     }
 }
@@ -273,6 +286,12 @@ static void build_list_view() {
     _add_status_lbl = nullptr;
     _add_fetch_btn = nullptr;
     _add_ta = nullptr;
+    _add_hint_lbl = nullptr;
+    _add_match_count = 0;
+    for (int i = 0; i < ADD_MATCH_MAX; i++) {
+        _add_match_btns[i] = nullptr;
+        _add_match_ptrs[i] = nullptr;
+    }
     _wp_name_ta = nullptr;
     _wp_lat_ta = nullptr;
     _wp_lon_ta = nullptr;
@@ -328,10 +347,28 @@ static void build_list_view() {
         lv_obj_add_event_cb(row, add_row_click_cb, LV_EVENT_CLICKED, (void *)(intptr_t)i);
 
         lv_obj_t *lbl = lv_label_create(row);
-        lv_label_set_text(lbl, loc->name);
+        // Airports: show ICAO + looked-up name. Waypoints keep loc->name.
+        const bool show_nearby = locations_nearby_enabled(i) && locations_nearby_count(i) > 0;
+        if (loc->icao[0]) {
+            const StaticAirport *ap = airports_lookup_icao(loc->icao);
+            if (ap && ap->name[0]) {
+                char line[80];
+                snprintf(line, sizeof(line), "%s  %s", loc->icao, ap->name);
+                lv_label_set_text(lbl, line);
+            } else {
+                lv_label_set_text(lbl, loc->icao[0] ? loc->icao : loc->name);
+            }
+        } else {
+            lv_label_set_text(lbl, loc->name);
+        }
         lv_obj_set_style_text_font(lbl, &lv_font_montserrat_16, 0);
         lv_obj_set_style_text_color(lbl, COLOR_TEXT, 0);
-        lv_obj_align(lbl, LV_ALIGN_LEFT_MID, 10, 0);
+        // When a nearby badge sits on the second line, pin the name to the
+        // top so the two don't collide mid-row.
+        if (show_nearby) lv_obj_align(lbl, LV_ALIGN_TOP_LEFT, 10, 6);
+        else lv_obj_align(lbl, LV_ALIGN_LEFT_MID, 10, 0);
+        lv_obj_set_width(lbl, PANEL_W - ROW_ICON_RESERVE - 16);
+        lv_label_set_long_mode(lbl, LV_LABEL_LONG_CLIP);
         lv_obj_clear_flag(lbl, LV_OBJ_FLAG_CLICKABLE);
 
         lv_obj_t *rm = lv_label_create(row);
@@ -387,24 +424,109 @@ static void build_list_view() {
     add_row(LV_SYMBOL_PLUS "  Add Location", [](lv_event_t *e) { build_add_waypoint_view(); });
 }
 
-static void fetch_btn_click_cb(lv_event_t *e) {
-    if (_add_in_progress) return;
-    const char *text = lv_textarea_get_text(_add_ta);
-    if (!text || strlen(text) < 3) {
-        lv_label_set_text(_add_status_lbl, "Enter a 3-4 letter ICAO code");
-        lv_obj_set_style_text_color(_add_status_lbl, COLOR_ERR, 0);
-        return;
-    }
-
+static void request_add_icao(const char *icao_in) {
+    if (_add_in_progress || !icao_in || !icao_in[0]) return;
     char icao[LOC_ICAO_LEN];
-    strlcpy(icao, text, sizeof(icao));
+    strlcpy(icao, icao_in, sizeof(icao));
     for (char *c = icao; *c; c++) *c = toupper((unsigned char)*c);
 
     _add_in_progress = true;
     lv_label_set_text(_add_status_lbl, "Fetching...");
     lv_obj_set_style_text_color(_add_status_lbl, COLOR_DIM, 0);
+    locations_request_add(icao);
+}
 
-    locations_request_add(icao); // picked up by location_poll_task's loop
+static void add_match_click_cb(lv_event_t *e) {
+    int idx = (int)(intptr_t)lv_event_get_user_data(e);
+    if (idx < 0 || idx >= _add_match_count || !_add_match_ptrs[idx]) return;
+    const StaticAirport *ap = _add_match_ptrs[idx];
+    lv_textarea_set_text(_add_ta, ap->icao);
+    if (_add_hint_lbl) {
+        lv_label_set_text_fmt(_add_hint_lbl, "%s — %s", ap->icao, ap->name);
+        lv_obj_set_style_text_color(_add_hint_lbl, COLOR_ACCENT, 0);
+    }
+    request_add_icao(ap->icao);
+}
+
+static void refresh_add_matches() {
+    if (!_add_ta) return;
+    const char *text = lv_textarea_get_text(_add_ta);
+    const StaticAirport *hits[ADD_MATCH_MAX] = {};
+    int n = 0;
+    if (text && strlen(text) >= 2) {
+        n = airports_search(text, hits, ADD_MATCH_MAX);
+    }
+    _add_match_count = n;
+    for (int i = 0; i < ADD_MATCH_MAX; i++) {
+        _add_match_ptrs[i] = (i < n) ? hits[i] : nullptr;
+        if (!_add_match_btns[i]) continue;
+        if (i < n) {
+            char line[80];
+            snprintf(line, sizeof(line), "%s  %s", hits[i]->icao, hits[i]->name);
+            // Button label is the child label created in build_add_view.
+            lv_obj_t *lbl = lv_obj_get_child(_add_match_btns[i], 0);
+            if (lbl) lv_label_set_text(lbl, line);
+            lv_obj_clear_flag(_add_match_btns[i], LV_OBJ_FLAG_HIDDEN);
+        } else {
+            lv_obj_add_flag(_add_match_btns[i], LV_OBJ_FLAG_HIDDEN);
+        }
+    }
+
+    if (_add_hint_lbl) {
+        if (n == 1) {
+            lv_label_set_text_fmt(_add_hint_lbl, "%s — %s", hits[0]->icao, hits[0]->name);
+            lv_obj_set_style_text_color(_add_hint_lbl, COLOR_ACCENT, 0);
+        } else if (n > 1) {
+            lv_label_set_text(_add_hint_lbl, "Tap a match, or Fetch with an ICAO");
+            lv_obj_set_style_text_color(_add_hint_lbl, COLOR_DIM, 0);
+        } else if (text && text[0]) {
+            lv_label_set_text(_add_hint_lbl, "No match in static airport DB");
+            lv_obj_set_style_text_color(_add_hint_lbl, COLOR_DIM, 0);
+        } else {
+            lv_label_set_text(_add_hint_lbl, "ICAO or airport name");
+            lv_obj_set_style_text_color(_add_hint_lbl, COLOR_DIM, 0);
+        }
+    }
+}
+
+static void fetch_btn_click_cb(lv_event_t *e) {
+    (void)e;
+    if (_add_in_progress) return;
+    const char *text = lv_textarea_get_text(_add_ta);
+    if (!text || strlen(text) < 2) {
+        lv_label_set_text(_add_status_lbl, "Enter ICAO or airport name");
+        lv_obj_set_style_text_color(_add_status_lbl, COLOR_ERR, 0);
+        return;
+    }
+
+    // Prefer an exact / single search hit so name queries resolve to ICAO.
+    const StaticAirport *hits[ADD_MATCH_MAX] = {};
+    int n = airports_search(text, hits, ADD_MATCH_MAX);
+    if (n == 1) {
+        request_add_icao(hits[0]->icao);
+        return;
+    }
+
+    // Raw ICAO typed (3-4 alnum) even if not in the static DB — airportdb.io
+    // may still resolve it.
+    bool maybe_icao = (strlen(text) >= 3 && strlen(text) <= 4);
+    if (maybe_icao) {
+        for (const char *p = text; *p; p++) {
+            if (!isalnum((unsigned char)*p)) { maybe_icao = false; break; }
+        }
+    }
+    if (maybe_icao) {
+        request_add_icao(text);
+        return;
+    }
+
+    if (n > 1) {
+        lv_label_set_text(_add_status_lbl, "Multiple matches — tap one");
+        lv_obj_set_style_text_color(_add_status_lbl, COLOR_ERR, 0);
+    } else {
+        lv_label_set_text(_add_status_lbl, "No airport match — try ICAO");
+        lv_obj_set_style_text_color(_add_status_lbl, COLOR_ERR, 0);
+    }
 }
 
 static void build_add_view() {
@@ -412,9 +534,15 @@ static void build_add_view() {
         lv_obj_add_flag(_panel, LV_OBJ_FLAG_HIDDEN);
         lv_obj_delete_async(_panel); // see build_list_view() -- called from a click event on a descendant of _panel (the "Add airport" row)
     }
+    _add_match_count = 0;
+    for (int i = 0; i < ADD_MATCH_MAX; i++) {
+        _add_match_btns[i] = nullptr;
+        _add_match_ptrs[i] = nullptr;
+    }
 
+    const int match_h = ADD_MATCH_MAX * 34;
     _panel = lv_obj_create(_overlay);
-    lv_obj_set_size(_panel, PANEL_W, 200);
+    lv_obj_set_size(_panel, PANEL_W, 170 + match_h);
     lv_obj_set_pos(_panel, 8, 8);
     lv_obj_set_style_bg_color(_panel, COLOR_PANEL, 0);
     lv_obj_set_style_bg_opa(_panel, LV_OPA_COVER, 0);
@@ -423,10 +551,11 @@ static void build_add_view() {
     lv_obj_set_style_border_opa(_panel, LV_OPA_40, 0);
     lv_obj_set_style_radius(_panel, 8, 0);
     lv_obj_set_style_pad_all(_panel, 10, 0);
-    lv_obj_clear_flag(_panel, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(_panel, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_scroll_dir(_panel, LV_DIR_VER);
 
     lv_obj_t *title = lv_label_create(_panel);
-    lv_label_set_text(title, "Add airport by ICAO");
+    lv_label_set_text(title, "Add airport");
     lv_obj_set_style_text_font(title, &lv_font_montserrat_16, 0);
     lv_obj_set_style_text_color(title, COLOR_TEXT, 0);
     lv_obj_set_pos(title, 0, 0);
@@ -435,12 +564,24 @@ static void build_add_view() {
     lv_obj_set_size(_add_ta, PANEL_W - 20, 40);
     lv_obj_set_pos(_add_ta, 0, 28);
     lv_textarea_set_one_line(_add_ta, true);
-    lv_textarea_set_max_length(_add_ta, LOC_ICAO_LEN - 1);
-    lv_textarea_set_placeholder_text(_add_ta, "e.g. KLGA");
+    lv_textarea_set_max_length(_add_ta, 40);
+    lv_textarea_set_placeholder_text(_add_ta, "ICAO or name (e.g. KLGA, Kennedy)");
+    lv_obj_add_event_cb(_add_ta, [](lv_event_t *e) {
+        (void)e;
+        refresh_add_matches();
+    }, LV_EVENT_VALUE_CHANGED, nullptr);
+
+    _add_hint_lbl = lv_label_create(_panel);
+    lv_label_set_text(_add_hint_lbl, "ICAO or airport name");
+    lv_obj_set_style_text_font(_add_hint_lbl, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_color(_add_hint_lbl, COLOR_DIM, 0);
+    lv_obj_set_width(_add_hint_lbl, PANEL_W - 20);
+    lv_obj_set_pos(_add_hint_lbl, 0, 72);
+    lv_label_set_long_mode(_add_hint_lbl, LV_LABEL_LONG_CLIP);
 
     _add_fetch_btn = lv_obj_create(_panel);
     lv_obj_set_size(_add_fetch_btn, 90, BTN_H + 10);
-    lv_obj_set_pos(_add_fetch_btn, 0, 76);
+    lv_obj_set_pos(_add_fetch_btn, 0, 96);
     lv_obj_set_style_bg_color(_add_fetch_btn, COLOR_ACCENT, 0);
     lv_obj_set_style_radius(_add_fetch_btn, 6, 0);
     lv_obj_clear_flag(_add_fetch_btn, LV_OBJ_FLAG_SCROLLABLE);
@@ -452,11 +593,11 @@ static void build_add_view() {
 
     lv_obj_t *back_btn = lv_obj_create(_panel);
     lv_obj_set_size(back_btn, 90, BTN_H + 10);
-    lv_obj_set_pos(back_btn, 100, 76);
+    lv_obj_set_pos(back_btn, 100, 96);
     lv_obj_set_style_bg_color(back_btn, COLOR_ROW, 0);
     lv_obj_set_style_radius(back_btn, 6, 0);
     lv_obj_clear_flag(back_btn, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_add_event_cb(back_btn, [](lv_event_t *e) { build_list_view(); }, LV_EVENT_CLICKED, nullptr);
+    lv_obj_add_event_cb(back_btn, [](lv_event_t *e) { (void)e; build_list_view(); }, LV_EVENT_CLICKED, nullptr);
     lv_obj_t *back_lbl = lv_label_create(back_btn);
     lv_label_set_text(back_lbl, "Cancel");
     lv_obj_set_style_text_color(back_lbl, COLOR_DIM, 0);
@@ -466,14 +607,31 @@ static void build_add_view() {
     lv_label_set_text(_add_status_lbl, "");
     lv_obj_set_style_text_font(_add_status_lbl, &lv_font_montserrat_14, 0);
     lv_obj_set_width(_add_status_lbl, PANEL_W - 20);
-    lv_obj_set_pos(_add_status_lbl, 0, 130);
+    lv_obj_set_pos(_add_status_lbl, 0, 136);
+
+    for (int i = 0; i < ADD_MATCH_MAX; i++) {
+        _add_match_btns[i] = lv_obj_create(_panel);
+        lv_obj_set_size(_add_match_btns[i], PANEL_W - 20, 30);
+        lv_obj_set_pos(_add_match_btns[i], 0, 160 + i * 34);
+        lv_obj_set_style_bg_color(_add_match_btns[i], COLOR_ROW, 0);
+        lv_obj_set_style_radius(_add_match_btns[i], 4, 0);
+        lv_obj_set_style_pad_all(_add_match_btns[i], 4, 0);
+        lv_obj_clear_flag(_add_match_btns[i], LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_add_flag(_add_match_btns[i], LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_event_cb(_add_match_btns[i], add_match_click_cb, LV_EVENT_CLICKED, (void *)(intptr_t)i);
+        lv_obj_t *ml = lv_label_create(_add_match_btns[i]);
+        lv_label_set_text(ml, "");
+        lv_obj_set_style_text_font(ml, &lv_font_montserrat_14, 0);
+        lv_obj_set_style_text_color(ml, COLOR_TEXT, 0);
+        lv_obj_set_width(ml, PANEL_W - 36);
+        lv_label_set_long_mode(ml, LV_LABEL_LONG_CLIP);
+        lv_obj_align(ml, LV_ALIGN_LEFT_MID, 4, 0);
+        lv_obj_clear_flag(ml, LV_OBJ_FLAG_CLICKABLE);
+    }
 
     lv_obj_add_event_cb(_add_ta, [](lv_event_t *e) {
+        (void)e;
         lv_keyboard_set_textarea(_keyboard, _add_ta);
-        // Explicit, not inherited -- the keyboard object is shared and
-        // persists across subviews within one popover session, so without
-        // this an ICAO field opened after a lat/lon/elevation field would
-        // otherwise still be showing the numeric layout.
         lv_keyboard_set_mode(_keyboard, LV_KEYBOARD_MODE_TEXT_LOWER);
         lv_obj_clear_flag(_keyboard, LV_OBJ_FLAG_HIDDEN);
     }, LV_EVENT_FOCUSED, nullptr);

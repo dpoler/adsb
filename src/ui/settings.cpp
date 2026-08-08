@@ -276,7 +276,7 @@ static void status_tab_refresh(lv_timer_t *t) {
     // airport attempt failing).
     if (g_config.airportdb_token[0]) {
         lv_obj_set_style_text_color(_airportdb_val, SYS_COLOR, 0);
-        lv_label_set_text(_airportdb_val, "Set");
+        lv_label_set_text(_airportdb_val, g_config.airportdb_enabled ? "Set / on" : "Set / off");
     } else {
         lv_obj_set_style_text_color(_airportdb_val, WARN_COLOR, 0);
         lv_label_set_text(_airportdb_val, "Not set");

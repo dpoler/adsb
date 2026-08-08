@@ -213,9 +213,10 @@ Per-view settings (trails, tags, filters, secondary-locations visibility) live i
 | [api.adsb.lol](https://api.adsb.lol) | Live aircraft positions | None |
 | [airportdb.io](https://airportdb.io) | Runway geometry + elevation for saved locations | Free token |
 | [api.adsbdb.com](https://www.adsbdb.com) | Registration, operator, aircraft type enrichment | None |
-| [planespotters.net](https://www.planespotters.net) | Photo credit text (no image rendering — see Known Issues) | None |
+| [planespotters.net](https://www.planespotters.net) | Photo credit text (no image rendering on ESP32 — see Known Issues; Pi downloads thumbnails) | None |
+| [AeroDataBox](https://aerodatabox.com) (RapidAPI / API.Market / Direct) | Optional live flight origin/destination on the detail card (Pi) | Provider API key |
 
-Origin/destination (flight route) is deliberately **not** shown anywhere in this app — both adsb.lol and adsbdb.com source that data from the same crowd-sourced, callsign-keyed VRS standing-data tables with no versioning, and it's frequently stale/wrong for reassigned flight numbers. Rather than display unreliable route guesses, this app just doesn't show one.
+Static callsign→route tables (adsbdb routes, VRS standing data, etc.) are deliberately **not** used — they're frequently stale for reassigned flight numbers. Optional origin/destination on Pi comes from AeroDataBox's live flight-status API instead (off by default; set `adbox_key` + `adbox_prov` for RapidAPI / API.Market / Direct, then enable in Settings). Marketplace API-unit quotas reset on the **subscription billing cycle** (not a calendar month; see AeroDataBox FAQ) and remaining units are only on the provider dashboard — the app tracks a local **UTC calendar-month** call count (`adbox_n`) and can soft-cap (`adbox_lim`) or auto-disable on HTTP 429.
 
 ## Architecture
 

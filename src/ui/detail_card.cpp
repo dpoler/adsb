@@ -5,25 +5,31 @@
 #include "../data/locations.h"
 #include "../data/enrichment.h"
 #include "../data/airlines.h"
+#include "airports_lookup.h"
 #include "../pins_config.h"
 #include <cstdio> // snprintf -- not reliably transitive under libstdc++ (Pi build)
+#include <cstring>
+#include <cctype>
 
 static lv_obj_t *_card = nullptr;
 #if LCD_H_RES >= 1280
 static lv_obj_t *_summary_box = nullptr; // identity panel, upper-left on wide cards
 #endif
 
-// Header
-static lv_obj_t *_callsign_label = nullptr;
+// Header / identity
+static lv_obj_t *_callsign_label = nullptr;   // flight number (accent, compact)
+static lv_obj_t *_airline_label = nullptr;    // airline on its own line (accent)
 static lv_obj_t *_badge_label = nullptr;
-
-// Sub-header
-static lv_obj_t *_reg_label = nullptr;
-
-// Identity
-static lv_obj_t *_operator_label = nullptr;
-static lv_obj_t *_type_label = nullptr;
-static lv_obj_t *_aircraft_detail_label = nullptr;
+static lv_obj_t *_ids_label = nullptr;        // tail | ICAO24 | squawk
+static lv_obj_t *_ac_label = nullptr;         // manufacturer + type
+static lv_obj_t *_cat_label = nullptr;        // category alone
+// FROM / TO route block (boarding-pass style two columns)
+static lv_obj_t *_route_from_hdr = nullptr;
+static lv_obj_t *_route_to_hdr = nullptr;
+static lv_obj_t *_route_from_icao = nullptr;
+static lv_obj_t *_route_to_icao = nullptr;
+static lv_obj_t *_route_from_name = nullptr;
+static lv_obj_t *_route_to_name = nullptr;
 static lv_obj_t *_photo_credit_label = nullptr;
 #if !defined(ARDUINO)
 static lv_obj_t *_photo_img = nullptr;
@@ -68,8 +74,9 @@ static AircraftList *_list = nullptr; // the live list -- update_timer_cb re-syn
 #if LCD_H_RES >= 1280
 #define CARD_H         340
 #define CARD_PAD       16
-#define SUMMARY_W      360
-#define SUMMARY_H      168
+// Wide enough for FROM/TO columns under the identity block.
+#define SUMMARY_W      400
+#define SUMMARY_H      270
 #define PHOTO_SLOT_W   400
 #define PHOTO_SLOT_H   220
 // Telemetry labels/values are short ("ALTITUDE", "FL350") — no need to
@@ -84,13 +91,14 @@ static AircraftList *_list = nullptr; // the live list -- update_timer_cb re-syn
 #define GRID_ROW_H     42
 #define GRID_COLS      3
 #else
-#define CARD_H         310
+#define CARD_H         340
 #define CARD_PAD       16
 #define PHOTO_SLOT_W   0
 #define PHOTO_SLOT_H   0
 #define STATS_X        0
 #define IDENTITY_MAX_W (LCD_H_RES - 32)
-#define GRID_Y0        148
+// Room for FROM/TO route block under identity.
+#define GRID_Y0        210
 #define GRID_ROW_H     42
 #define GRID_COL_W     160
 #define GRID_COLS      6
@@ -161,65 +169,166 @@ static const char *decode_squawk(uint16_t sq) {
     }
 }
 
-// Type line: "Desc (CODE)  |  Cat A3: Large" — keeps category with the
-// aircraft identity instead of floating alone at a fixed x=500.
-static void set_type_and_category(const char *desc_or_type, const char *type_code,
-                                  const char *category) {
-    char buf[96];
-    int pos = 0;
-    if (desc_or_type && desc_or_type[0]) {
-        if (type_code && type_code[0] && strcmp(desc_or_type, type_code) != 0)
-            pos = snprintf(buf, sizeof(buf), "%s (%s)", desc_or_type, type_code);
-        else
-            pos = snprintf(buf, sizeof(buf), "%s", desc_or_type);
-    } else if (type_code && type_code[0]) {
-        pos = snprintf(buf, sizeof(buf), "%s", type_code);
-    } else {
-        buf[0] = '\0';
-    }
-
+// Type line helpers — manufacturer+type on one row, category on the next.
+static void set_category_line(const char *category) {
+    if (!_cat_label) return;
     const char *cat_desc = decode_category(category ? category : "");
     if (category && category[0]) {
-        if (pos > 0) pos += snprintf(buf + pos, sizeof(buf) - pos, SEP);
         if (cat_desc[0])
-            snprintf(buf + pos, sizeof(buf) - pos, "Cat %s: %s", category, cat_desc);
+            lv_label_set_text_fmt(_cat_label, "Cat %s: %s", category, cat_desc);
         else
-            snprintf(buf + pos, sizeof(buf) - pos, "Cat %s", category);
+            lv_label_set_text_fmt(_cat_label, "Cat %s", category);
+    } else {
+        lv_label_set_text(_cat_label, "");
     }
-    lv_label_set_text(_type_label, buf);
+}
+
+// "Manufacturer Type" with a single space. Case-insensitive: if the type
+// already begins with the manufacturer, show the type alone (avoid
+// "Boeing Boeing 737-800"). Prefer never dropping a brand that enrichment
+// actually sent.
+static bool starts_with_ci(const char *s, const char *prefix) {
+    if (!s || !prefix || !prefix[0]) return false;
+    while (*prefix) {
+        if (!*s) return false;
+        if (tolower((unsigned char)*s) != tolower((unsigned char)*prefix)) return false;
+        ++s; ++prefix;
+    }
+    return *s == '\0' || *s == ' ' || *s == '-';
+}
+
+static void set_aircraft_line(const char *manufacturer, const char *type_or_model) {
+    if (!_ac_label) return;
+    char buf[96] = {};
+    const char *mfr = (manufacturer && manufacturer[0]) ? manufacturer : "";
+    const char *typ = (type_or_model && type_or_model[0]) ? type_or_model : "";
+    // Trim leading spaces on typ
+    while (*typ == ' ') ++typ;
+    if (mfr[0] && typ[0]) {
+        if (starts_with_ci(typ, mfr))
+            snprintf(buf, sizeof(buf), "%s", typ);
+        else
+            snprintf(buf, sizeof(buf), "%s %s", mfr, typ);
+    } else if (typ[0]) {
+        snprintf(buf, sizeof(buf), "%s", typ);
+    } else if (mfr[0]) {
+        snprintf(buf, sizeof(buf), "%s", mfr);
+    }
+    lv_label_set_text(_ac_label, buf);
+}
+
+static int _y_ids_with_airline = 44;
+static int _y_ids_no_airline = 22;
+
+static void set_callsign_line(const char *callsign_or_icao) {
+    if (!_callsign_label) return;
+    lv_label_set_text(_callsign_label,
+                      (callsign_or_icao && callsign_or_icao[0]) ? callsign_or_icao : "");
+}
+
+static void set_airline_line(const char *airline) {
+    if (!_airline_label || !_ids_label) return;
+    if (airline && airline[0]) {
+        lv_label_set_text(_airline_label, airline);
+        lv_obj_clear_flag(_airline_label, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_set_y(_ids_label, _y_ids_with_airline);
+    } else {
+        lv_label_set_text(_airline_label, "");
+        lv_obj_add_flag(_airline_label, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_set_y(_ids_label, _y_ids_no_airline);
+    }
+}
+
+static void route_set_hidden(bool hidden) {
+    auto apply = [&](lv_obj_t *o) {
+        if (!o) return;
+        if (hidden) lv_obj_add_flag(o, LV_OBJ_FLAG_HIDDEN);
+        else lv_obj_clear_flag(o, LV_OBJ_FLAG_HIDDEN);
+    };
+    apply(_route_from_hdr);
+    apply(_route_to_hdr);
+    apply(_route_from_icao);
+    apply(_route_to_icao);
+    apply(_route_from_name);
+    apply(_route_to_name);
+}
+
+// Drop common trailing words so FROM/TO name columns stay readable at
+// half-width ("John F. Kennedy International Airport" → "John F. Kennedy").
+static void shorten_airport_name(const char *full, char *out, size_t out_sz) {
+    if (!out || out_sz == 0) return;
+    out[0] = '\0';
+    if (!full || !full[0]) return;
+    static const char *const SUFFIXES[] = {
+        " International Airport",
+        " International",
+        " Regional Airport",
+        " Municipal Airport",
+        " Airport",
+        " Airfield",
+        " Air Base",
+        " AFB",
+        nullptr
+    };
+    char buf[64];
+    snprintf(buf, sizeof(buf), "%s", full);
+    for (int i = 0; SUFFIXES[i]; i++) {
+        size_t bl = strlen(buf);
+        size_t sl = strlen(SUFFIXES[i]);
+        if (bl > sl && strcmp(buf + bl - sl, SUFFIXES[i]) == 0) {
+            buf[bl - sl] = '\0';
+            break;
+        }
+    }
+    // Trim trailing spaces after stripping.
+    size_t n = strlen(buf);
+    while (n > 0 && buf[n - 1] == ' ') buf[--n] = '\0';
+    snprintf(out, out_sz, "%s", buf[0] ? buf : full);
 }
 
 static void on_enrichment_ready(AircraftEnrichment *data) {
     if (!_visible) return;
 
-    // Model — more detailed than bulk API desc; keep category on the same line.
-    if (data->model[0]) {
-        set_type_and_category(data->model, _current_ac.type_code, _current_ac.category);
-    }
-
-    // Aircraft details line: manufacturer | country year | engines
-    // (registered owner dropped -- for airline aircraft it's almost always
-    // just the same airline name already shown above, from airline_lookup())
-    char detail[160] = {};
-    int pos = 0;
-    if (data->manufacturer[0]) {
-        pos += snprintf(detail + pos, sizeof(detail) - pos, "%s", data->manufacturer);
-    }
-    if (data->registered_country[0]) {
-        if (pos > 0) pos += snprintf(detail + pos, sizeof(detail) - pos, SEP);
-        pos += snprintf(detail + pos, sizeof(detail) - pos, "%s", data->registered_country);
-        if (data->year_built > 0) {
-            pos += snprintf(detail + pos, sizeof(detail) - pos, " %d", data->year_built);
+    // Manufacturer + type. adsbdb's "type" is often a short designator
+    // (A320, B738) while manufacturer is a separate field — always join when
+    // both exist. If manufacturer is missing and model is a short code, keep
+    // the richer ADS-B desc when it already names the brand (e.g. "Airbus A320").
+    {
+        const char *mfr = data->manufacturer;
+        const char *typ = nullptr;
+        if (data->model[0]) {
+            const bool model_short = strlen(data->model) <= 5;
+            if (!mfr[0] && model_short && _current_ac.desc[0]
+                && strlen(_current_ac.desc) > strlen(data->model)) {
+                typ = _current_ac.desc;
+            } else {
+                typ = data->model;
+            }
+        } else if (_current_ac.desc[0]) {
+            typ = _current_ac.desc;
+        } else {
+            typ = _current_ac.type_code;
         }
-    } else if (data->year_built > 0) {
-        if (pos > 0) pos += snprintf(detail + pos, sizeof(detail) - pos, SEP);
-        pos += snprintf(detail + pos, sizeof(detail) - pos, "Built %d", data->year_built);
+        set_aircraft_line(mfr, typ);
     }
-    if (data->engine_count > 0 && data->engine_type[0]) {
-        if (pos > 0) pos += snprintf(detail + pos, sizeof(detail) - pos, SEP);
-        snprintf(detail + pos, sizeof(detail) - pos, "%dx %s", data->engine_count, data->engine_type);
+    set_category_line(_current_ac.category);
+
+    if (data->origin_icao[0] || data->dest_icao[0]) {
+        const char *o = data->origin_icao[0] ? data->origin_icao : "----";
+        const char *d = data->dest_icao[0] ? data->dest_icao : "----";
+        char oname[64] = {}, dname[64] = {};
+        char oshort[48] = {}, dshort[48] = {};
+        airports_format_name(data->origin_icao, oname, sizeof(oname));
+        airports_format_name(data->dest_icao, dname, sizeof(dname));
+        shorten_airport_name(oname, oshort, sizeof(oshort));
+        shorten_airport_name(dname, dshort, sizeof(dshort));
+
+        lv_label_set_text(_route_from_icao, o);
+        lv_label_set_text(_route_to_icao, d);
+        lv_label_set_text(_route_from_name, oshort[0] ? oshort : "—");
+        lv_label_set_text(_route_to_name, dshort[0] ? dshort : "—");
+        route_set_hidden(false);
     }
-    if (detail[0]) lv_label_set_text(_aircraft_detail_label, detail);
 
 #if !defined(ARDUINO)
     if (data->photo_rgb565 && data->photo_w > 0 && data->photo_h > 0 && _photo_img) {
@@ -298,6 +407,19 @@ static void render_grid(const Aircraft *ac) {
     lv_label_set_text_fmt(_hdg_label, "%03d", ac->heading);
     lv_label_set_text_fmt(_vrate_label, "%+d fpm", ac->vert_rate);
     lv_label_set_text_fmt(_squawk_label, "%04d", ac->squawk);
+
+    // Keep identity squawk row in sync with live telemetry.
+    if (_ids_label) {
+        const char *sq_decode = decode_squawk(ac->squawk);
+        const char *reg = ac->registration[0] ? ac->registration : "----";
+        if (sq_decode[0]) {
+            lv_label_set_text_fmt(_ids_label, "%s" SEP "%s" SEP "%04d (%s)",
+                                  reg, ac->icao_hex, ac->squawk, sq_decode);
+        } else {
+            lv_label_set_text_fmt(_ids_label, "%s" SEP "%s" SEP "%04d",
+                                  reg, ac->icao_hex, ac->squawk);
+        }
+    }
 
     const char *status;
     if (ac->on_ground) status = "On Ground";
@@ -473,26 +595,38 @@ void detail_card_init(lv_obj_t *parent, AircraftList *list) {
     lv_obj_t *id_parent = _summary_box;
     const int id_x = 0;
     const int y_call = 0;
-    const int y_reg = 32;
-    const int y_op = 54;
-    const int y_type = 76;
-    const int y_detail = 98;
+    const int y_airline = 22;
+    const int y_ids = 44;
+    // Blank line after squawk row, then manufacturer/type + category.
+    const int y_ac = 80;
+    const int y_cat = 100;
+    // Blank line before FROM/TO.
+    const int y_route_hdr = 136;
+    const int y_route_icao = 154;
+    const int y_route_name = 176;
 #else
     lv_obj_t *id_parent = _card;
     const int id_x = 0;
     const int y_call = 0;
-    const int y_reg = 34;
-    const int y_op = 56;
-    const int y_type = 78;
-    const int y_detail = 98;
+    const int y_airline = 22;
+    const int y_ids = 44;
+    const int y_ac = 80;
+    const int y_cat = 100;
+    const int y_route_hdr = 136;
+    const int y_route_icao = 154;
+    const int y_route_name = 176;
 #endif
+    _y_ids_with_airline = y_ids;
+    _y_ids_no_airline = y_airline;
 
     // === HEADER / IDENTITY ===
+    // Callsign + airline in the compact accent style (not the old 28pt white
+    // hero). Airline is always on its own line so long carrier names fit.
     _callsign_label = lv_label_create(id_parent);
-    lv_obj_set_style_text_font(_callsign_label, &lv_font_montserrat_28, 0);
-    lv_obj_set_style_text_color(_callsign_label, lv_color_white(), 0);
+    lv_obj_set_style_text_font(_callsign_label, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_color(_callsign_label, CARD_ACCENT, 0);
     lv_obj_set_pos(_callsign_label, id_x, y_call);
-    lv_obj_set_width(_callsign_label, IDENTITY_MAX_W - 120);
+    lv_obj_set_width(_callsign_label, IDENTITY_MAX_W - 100);
     lv_label_set_long_mode(_callsign_label, LV_LABEL_LONG_CLIP);
 
     _badge_label = lv_label_create(id_parent);
@@ -500,34 +634,80 @@ void detail_card_init(lv_obj_t *parent, AircraftList *list) {
     lv_obj_align_to(_badge_label, _callsign_label, LV_ALIGN_OUT_RIGHT_MID, 12, 0);
     lv_label_set_text(_badge_label, "");
 
-    _reg_label = lv_label_create(id_parent);
-    lv_obj_set_style_text_font(_reg_label, &lv_font_montserrat_16, 0);
-    lv_obj_set_style_text_color(_reg_label, CARD_DIM, 0);
-    lv_obj_set_pos(_reg_label, id_x, y_reg);
-    lv_obj_set_width(_reg_label, IDENTITY_MAX_W);
-    lv_label_set_long_mode(_reg_label, LV_LABEL_LONG_CLIP);
+    _airline_label = lv_label_create(id_parent);
+    lv_obj_set_style_text_font(_airline_label, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_color(_airline_label, CARD_ACCENT, 0);
+    lv_obj_set_pos(_airline_label, id_x, y_airline);
+    lv_obj_set_width(_airline_label, IDENTITY_MAX_W);
+    lv_label_set_long_mode(_airline_label, LV_LABEL_LONG_CLIP);
+    lv_obj_add_flag(_airline_label, LV_OBJ_FLAG_HIDDEN);
 
-    _operator_label = lv_label_create(id_parent);
-    lv_obj_set_style_text_font(_operator_label, &lv_font_montserrat_16, 0);
-    lv_obj_set_style_text_color(_operator_label, CARD_ACCENT, 0);
-    lv_obj_set_pos(_operator_label, id_x, y_op);
-    lv_obj_set_width(_operator_label, IDENTITY_MAX_W);
-    lv_label_set_long_mode(_operator_label, LV_LABEL_LONG_CLIP);
+    _ids_label = lv_label_create(id_parent);
+    lv_obj_set_style_text_font(_ids_label, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_color(_ids_label, CARD_DIM, 0);
+    lv_obj_set_pos(_ids_label, id_x, y_ids);
+    lv_obj_set_width(_ids_label, IDENTITY_MAX_W);
+    lv_label_set_long_mode(_ids_label, LV_LABEL_LONG_CLIP);
 
-    _type_label = lv_label_create(id_parent);
-    lv_obj_set_style_text_font(_type_label, &lv_font_montserrat_14, 0);
-    lv_obj_set_style_text_color(_type_label, CARD_TEXT, 0);
-    lv_obj_set_pos(_type_label, id_x, y_type);
-    lv_obj_set_width(_type_label, IDENTITY_MAX_W);
-    lv_label_set_long_mode(_type_label, LV_LABEL_LONG_CLIP);
+    _ac_label = lv_label_create(id_parent);
+    lv_label_set_text(_ac_label, "");
+    lv_obj_set_style_text_font(_ac_label, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_color(_ac_label, CARD_TEXT, 0);
+    lv_obj_set_pos(_ac_label, id_x, y_ac);
+    lv_obj_set_width(_ac_label, IDENTITY_MAX_W);
+    lv_label_set_long_mode(_ac_label, LV_LABEL_LONG_CLIP);
 
-    _aircraft_detail_label = lv_label_create(id_parent);
-    lv_label_set_text(_aircraft_detail_label, "");
-    lv_obj_set_style_text_font(_aircraft_detail_label, &lv_font_montserrat_14, 0);
-    lv_obj_set_style_text_color(_aircraft_detail_label, CARD_DIM, 0);
-    lv_obj_set_pos(_aircraft_detail_label, id_x, y_detail);
-    lv_obj_set_width(_aircraft_detail_label, IDENTITY_MAX_W);
-    lv_label_set_long_mode(_aircraft_detail_label, LV_LABEL_LONG_CLIP);
+    _cat_label = lv_label_create(id_parent);
+    lv_label_set_text(_cat_label, "");
+    lv_obj_set_style_text_font(_cat_label, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_color(_cat_label, CARD_DIM, 0);
+    lv_obj_set_pos(_cat_label, id_x, y_cat);
+    lv_obj_set_width(_cat_label, IDENTITY_MAX_W);
+    lv_label_set_long_mode(_cat_label, LV_LABEL_LONG_CLIP);
+
+    // FROM / TO — two columns, boarding-pass style (no arrow).
+    const int route_gap = 12;
+    const int route_col_w = (IDENTITY_MAX_W - route_gap) / 2;
+    const int route_to_x = id_x + route_col_w + route_gap;
+
+    auto make_route_hdr = [&](const char *text, int x) {
+        lv_obj_t *lbl = lv_label_create(id_parent);
+        lv_label_set_text(lbl, text);
+        lv_obj_set_style_text_font(lbl, &lv_font_montserrat_14, 0);
+        lv_obj_set_style_text_color(lbl, CARD_DIM, 0);
+        lv_obj_set_pos(lbl, x, y_route_hdr);
+        lv_obj_add_flag(lbl, LV_OBJ_FLAG_HIDDEN);
+        return lbl;
+    };
+    auto make_route_icao = [&](int x) {
+        lv_obj_t *lbl = lv_label_create(id_parent);
+        lv_label_set_text(lbl, "");
+        lv_obj_set_style_text_font(lbl, &lv_font_montserrat_16, 0);
+        lv_obj_set_style_text_color(lbl, CARD_ACCENT, 0);
+        lv_obj_set_pos(lbl, x, y_route_icao);
+        lv_obj_set_width(lbl, route_col_w);
+        lv_label_set_long_mode(lbl, LV_LABEL_LONG_CLIP);
+        lv_obj_add_flag(lbl, LV_OBJ_FLAG_HIDDEN);
+        return lbl;
+    };
+    auto make_route_name = [&](int x) {
+        lv_obj_t *lbl = lv_label_create(id_parent);
+        lv_label_set_text(lbl, "");
+        lv_obj_set_style_text_font(lbl, &lv_font_montserrat_14, 0);
+        lv_obj_set_style_text_color(lbl, CARD_DIM, 0);
+        lv_obj_set_pos(lbl, x, y_route_name);
+        lv_obj_set_width(lbl, route_col_w);
+        lv_label_set_long_mode(lbl, LV_LABEL_LONG_CLIP);
+        lv_obj_add_flag(lbl, LV_OBJ_FLAG_HIDDEN);
+        return lbl;
+    };
+
+    _route_from_hdr = make_route_hdr("FROM", id_x);
+    _route_to_hdr = make_route_hdr("TO", route_to_x);
+    _route_from_icao = make_route_icao(id_x);
+    _route_to_icao = make_route_icao(route_to_x);
+    _route_from_name = make_route_name(id_x);
+    _route_to_name = make_route_name(route_to_x);
 
     _photo_credit_label = lv_label_create(_card);
     lv_label_set_text(_photo_credit_label, "");
@@ -613,9 +793,14 @@ void detail_card_init(lv_obj_t *parent, AircraftList *list) {
 void detail_card_show(const Aircraft *ac) {
     memcpy(&_current_ac, ac, sizeof(Aircraft));
 
-    // === HEADER ===
-    lv_label_set_text(_callsign_label, ac->callsign[0] ? ac->callsign : ac->icao_hex);
-    // Re-anchor badge after callsign text width changes
+    // === IDENTITY ===
+    // Callsign (accent) then airline on the next line so long names fit.
+    const AirlineEntry *airline = airline_lookup(ac->callsign);
+    const char *airline_name = airline ? airline->name
+        : (ac->owner_op[0] ? ac->owner_op : "");
+    const char *flight = ac->callsign[0] ? ac->callsign : ac->icao_hex;
+    set_callsign_line(flight);
+    set_airline_line(airline_name);
     lv_obj_align_to(_badge_label, _callsign_label, LV_ALIGN_OUT_RIGHT_MID, 12, 0);
 
     // Military / Emergency badge
@@ -630,36 +815,31 @@ void detail_card_show(const Aircraft *ac) {
         lv_label_set_text(_badge_label, "");
     }
 
-    // Sub-header: Reg | ICAO | Squawk with decode
+    // Tail | ICAO24 | Squawk
     const char *sq_decode = decode_squawk(ac->squawk);
+    const char *reg = ac->registration[0] ? ac->registration : "----";
     if (sq_decode[0]) {
-        lv_label_set_text_fmt(_reg_label, "%s" SEP "%s" SEP "Sq %04d (%s)",
-                              ac->registration, ac->icao_hex, ac->squawk, sq_decode);
+        lv_label_set_text_fmt(_ids_label, "%s" SEP "%s" SEP "%04d (%s)",
+                              reg, ac->icao_hex, ac->squawk, sq_decode);
     } else {
-        lv_label_set_text_fmt(_reg_label, "%s" SEP "%s" SEP "Sq %04d",
-                              ac->registration, ac->icao_hex, ac->squawk);
+        lv_label_set_text_fmt(_ids_label, "%s" SEP "%s" SEP "%04d",
+                              reg, ac->icao_hex, ac->squawk);
     }
 
-    // === IDENTITY ===
-    // Airline name from callsign prefix (airlines.h) preferred — more
-    // consistently present than the ADS-B owner_op field, and reflects who's
-    // actually operating this flight (relevant for leased/wet-leased
-    // aircraft where owner_op may show a leasing company instead).
-    const AirlineEntry *airline = airline_lookup(ac->callsign);
-    if (airline) {
-        lv_label_set_text(_operator_label, airline->name);
-    } else {
-        lv_label_set_text(_operator_label, ac->owner_op[0] ? ac->owner_op : "");
-    }
+    // Manufacturer Type (enrichment fills manufacturer later) + Category.
+    // Layout leaves a blank line after the squawk row and before FROM/TO.
+    if (ac->desc[0])
+        set_aircraft_line("", ac->desc);
+    else
+        set_aircraft_line("", ac->type_code);
+    set_category_line(ac->category);
 
-    if (ac->desc[0]) {
-        set_type_and_category(ac->desc, ac->type_code, ac->category);
-    } else {
-        set_type_and_category(ac->type_code, nullptr, ac->category);
-    }
-
-    // Clear enrichment fields
-    lv_label_set_text(_aircraft_detail_label, "");
+    // Clear route until enrichment arrives
+    if (_route_from_icao) lv_label_set_text(_route_from_icao, "");
+    if (_route_to_icao) lv_label_set_text(_route_to_icao, "");
+    if (_route_from_name) lv_label_set_text(_route_from_name, "");
+    if (_route_to_name) lv_label_set_text(_route_to_name, "");
+    route_set_hidden(true);
     lv_label_set_text(_photo_credit_label, "");
     lv_obj_add_flag(_photo_credit_label, LV_OBJ_FLAG_HIDDEN);
 #if !defined(ARDUINO)
@@ -687,10 +867,10 @@ void detail_card_show(const Aircraft *ac) {
     // Start live update timer
     lv_timer_resume(_update_timer);
 
-    // Enrichment (adsbdb + planespotters). On Pi this also downloads and
-    // decodes the photo thumbnail into the detail card; on ESP32 only the
-    // text fields / photographer credit update (image path is broken).
-    enrichment_fetch(ac->icao_hex, ac->registration, on_enrichment_ready);
+    // Enrichment (adsbdb + planespotters; on Pi also photo decode + optional
+    // AeroDataBox origin/destination). ESP32 only gets text fields /
+    // photographer credit (image path is broken).
+    enrichment_fetch(ac->icao_hex, ac->registration, ac->callsign, on_enrichment_ready);
 }
 
 void detail_card_hide() {

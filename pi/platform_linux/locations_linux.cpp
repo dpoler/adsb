@@ -397,7 +397,7 @@ bool locations_add_from_icao(const char *icao, char *err, size_t err_size) {
     }
 
     Location loc;
-    if (!g_config.airportdb_token[0]) {
+    if (!g_config.airportdb_enabled || !g_config.airportdb_token[0]) {
 #if HAS_AIRPORTS_DB
         bool found = false;
         for (int i = 0; i < AIRPORTS_DB_COUNT; i++) {
@@ -411,9 +411,14 @@ bool locations_add_from_icao(const char *icao, char *err, size_t err_size) {
                 break;
             }
         }
-        if (!found) return fail("no airportdb.io token set, and this airport isn't in the static database");
+        if (!found) {
+            if (!g_config.airportdb_token[0])
+                return fail("no airportdb.io token set, and this airport isn't in the static database");
+            return fail("airportdb.io disabled, and this airport isn't in the static database");
+        }
 #else
-        return fail("no airportdb.io token set");
+        if (!g_config.airportdb_token[0]) return fail("no airportdb.io token set");
+        return fail("airportdb.io disabled");
 #endif
     } else if (!fetch_airport_data(icao_upper, loc, err, err_size)) {
         return false;

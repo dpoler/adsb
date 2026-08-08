@@ -4,6 +4,22 @@ struct UserConfig {
     char wifi_ssid[33];
     char wifi_pass[65];
     char airportdb_token[160]; // free token from airportdb.io — observed ~97 chars, sized with margin
+    bool airportdb_enabled;  // use airportdb.io when adding airports (key still required)
+    // AeroDataBox flight status (origin/destination). Key is hand-edited into
+    // config on Pi; serial TOKEN-style entry not wired for this key yet.
+    // Provider selects which marketplace gateway + auth header to use:
+    // 0=RapidAPI, 1=API.Market, 2=Direct (api.aerodatabox.com).
+    char aerodatabox_key[80];
+    int aerodatabox_provider;
+    bool aerodatabox_enabled; // detail-card O/D enrichment when key is present+valid
+    // Local AeroDataBox usage accounting (marketplace remaining-units are NOT
+    // exposed by RapidAPI/API.Market via the API key — only their dashboards
+    // know the real quota). We track calls we make and can soft-cap / react
+    // to HTTP 429.
+    int adbox_usage_yyyymm;   // calendar month of adbox_usage_count, e.g. 202608
+    int adbox_usage_count;    // AeroDataBox HTTP calls this month
+    int adbox_soft_limit;     // 0 = no local cap; else auto-disable at count
+    bool adbox_rate_limited;  // sticky: hit HTTP 429 (or soft limit)
     int radius_nm;           // API query radius = max(radius_presets), set on save
     int radius_presets[4];  // user-configurable zoom levels, sorted ascending
     bool use_metric;
