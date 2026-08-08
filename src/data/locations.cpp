@@ -496,8 +496,8 @@ bool locations_add_from_icao(const char *icao, char *err, size_t err_size) {
     }
 
     Location loc;
-    if (!g_config.airportdb_token[0]) {
-        // No token set -- can't fetch runway geometry, but that shouldn't
+    if (!g_config.airportdb_enabled || !g_config.airportdb_token[0]) {
+        // No token / disabled -- can't fetch runway geometry, but that shouldn't
         // block adding the airport outright (runway_count == 0 is already a
         // normal state elsewhere: a plain waypoint, or a fetch that hasn't
         // completed yet). Fall back to the static large/medium glyph DB
@@ -517,9 +517,14 @@ bool locations_add_from_icao(const char *icao, char *err, size_t err_size) {
                 break;
             }
         }
-        if (!found) return fail("no airportdb.io token set, and this airport isn't in the static database");
+        if (!found) {
+            if (!g_config.airportdb_token[0])
+                return fail("no airportdb.io token set, and this airport isn't in the static database");
+            return fail("airportdb.io disabled, and this airport isn't in the static database");
+        }
 #else
-        return fail("no airportdb.io token set");
+        if (!g_config.airportdb_token[0]) return fail("no airportdb.io token set");
+        return fail("airportdb.io disabled");
 #endif
     } else if (!fetch_airport_data(icao_upper, loc, err, err_size)) {
         return false;

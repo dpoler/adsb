@@ -1,22 +1,22 @@
 [Unit]
-Description=ADS-B Radar Display (Raspberry Pi kiosk)
+Description=FlightLevel314 ADS-B display (Raspberry Pi kiosk)
 After=network-online.target
 Wants=network-online.target
 
 [Service]
-ExecStart=/opt/adsb-pi/adsb_pi
+ExecStart=/opt/flightlevel314/flightlevel314
 Restart=always
 RestartSec=2
-User=adsb
+User=flightlevel314
 # storage_linux.cpp/locations_linux.cpp resolve config to
-# $HOME/.config/adsb/ -- the `adsb` service user has no real home
+# $HOME/.config/flightlevel314/ -- the service user has no real home
 # directory (useradd -r, no -m), so HOME is pinned here to a directory
 # under the app's own install path instead of relying on passwd's HOME
-# field. See pi/README.md's kiosk-install section for how this gets
+# field. See README.md's kiosk-install section for how this gets
 # seeded/chowned.
-Environment=HOME=/opt/adsb-pi
+Environment=HOME=/opt/flightlevel314
 # DRM (/dev/dri/*) and touch input (/dev/input/*) access -- see
-# pi/README.md for the udev/group setup this expects.
+# README.md for the udev/group setup this expects.
 SupplementaryGroups=video input render
 
 [Install]

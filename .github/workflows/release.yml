@@ -14,32 +14,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/cache@v4
-        with:
-          path: ~/.platformio
-          key: ${{ runner.os }}-pio-${{ hashFiles('platformio.ini') }}
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake libsdl2-dev \
+            libcurl4-openssl-dev pkg-config python3
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
+      - name: Configure (SDL)
+        run: cmake -S . -B build -DPI_DISPLAY_BACKEND=SDL
 
-      - name: Install PlatformIO
-        run: pip install platformio
+      - name: Build
+        run: cmake --build build -j$(nproc)
 
-      - name: Stamp version into source
-        run: echo '#define FIRMWARE_VERSION_STR "${{ github.ref_name }}"' > src/version.h
+      - name: Package binary
+        run: |
+          cp build/pi/flightlevel314 flightlevel314-linux-x86_64
+          chmod +x flightlevel314-linux-x86_64
 
-      # data/ota.cpp expects the asset under exactly this name
-      # (firmware-jc1060.bin). Adapted from dpoler/FlightRadarCYD's
-      # release.yml.
-      - name: Build jc1060
-        run: pio run -e jc1060
-
-      - name: Rename firmware binary for release
-        run: cp .pio/build/jc1060/firmware.bin firmware-jc1060.bin
-
-      - name: Create release and attach firmware
+      - name: Create release and attach binary
         uses: softprops/action-gh-release@v2
         with:
-          files: firmware-jc1060.bin
+          files: flightlevel314-linux-x86_64
           generate_release_notes: true

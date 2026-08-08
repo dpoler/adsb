@@ -180,7 +180,7 @@ bool http_get(const std::string &url, std::vector<uint8_t> &out) {
     curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curl_write);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &buf);
-    curl_easy_setopt(curl, CURLOPT_USERAGENT, "ADS-B-Display-Basemap/1.0");
+    curl_easy_setopt(curl, CURLOPT_USERAGENT, "FlightLevel314-Basemap/1.0");
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, 20L);
     curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 8L);
@@ -223,7 +223,7 @@ void bind_easy(TileFetch &job) {
     curl_easy_setopt(job.easy, CURLOPT_URL, job.url.c_str());
     curl_easy_setopt(job.easy, CURLOPT_WRITEFUNCTION, curl_write);
     curl_easy_setopt(job.easy, CURLOPT_WRITEDATA, &job.buf);
-    curl_easy_setopt(job.easy, CURLOPT_USERAGENT, "ADS-B-Display-Basemap/1.0");
+    curl_easy_setopt(job.easy, CURLOPT_USERAGENT, "FlightLevel314-Basemap/1.0");
     curl_easy_setopt(job.easy, CURLOPT_FOLLOWLOCATION, 1L);
     curl_easy_setopt(job.easy, CURLOPT_TIMEOUT, 20L);
     curl_easy_setopt(job.easy, CURLOPT_CONNECTTIMEOUT, 8L);
@@ -435,7 +435,7 @@ std::string cache_dir() {
         const char *home = getenv("HOME");
         base = home && home[0] ? std::string(home) + "/.config" : "/tmp";
     }
-    return base + "/adsb/basemap";
+    return base + "/flightlevel314/basemap";
 }
 
 void ensure_dir(const std::string &path) {

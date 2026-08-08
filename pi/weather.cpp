@@ -105,7 +105,7 @@ bool http_get(const char *url, std::vector<uint8_t> &out, long timeout_s = 20) {
     curl_easy_setopt(easy, CURLOPT_FOLLOWLOCATION, 1L);
     curl_easy_setopt(easy, CURLOPT_TIMEOUT, timeout_s);
     curl_easy_setopt(easy, CURLOPT_CONNECTTIMEOUT, 10L);
-    curl_easy_setopt(easy, CURLOPT_USERAGENT, "adsb-pi/1.0 (RainViewer overlay)");
+    curl_easy_setopt(easy, CURLOPT_USERAGENT, "flightlevel314/1.0 (RainViewer overlay)");
     curl_easy_setopt(easy, CURLOPT_ACCEPT_ENCODING, "");
     curl_easy_setopt(easy, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1);
     CURLcode rc = curl_easy_perform(easy);
@@ -136,7 +136,7 @@ void bind_easy(TileFetch &job) {
     curl_easy_setopt(job.easy, CURLOPT_FOLLOWLOCATION, 1L);
     curl_easy_setopt(job.easy, CURLOPT_TIMEOUT, 20L);
     curl_easy_setopt(job.easy, CURLOPT_CONNECTTIMEOUT, 10L);
-    curl_easy_setopt(job.easy, CURLOPT_USERAGENT, "adsb-pi/1.0 (RainViewer overlay)");
+    curl_easy_setopt(job.easy, CURLOPT_USERAGENT, "flightlevel314/1.0 (RainViewer overlay)");
     curl_easy_setopt(job.easy, CURLOPT_ACCEPT_ENCODING, "");
     curl_easy_setopt(job.easy, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1);
     curl_easy_setopt(job.easy, CURLOPT_PRIVATE, &job);
@@ -309,7 +309,7 @@ std::string cache_dir() {
         const char *home = getenv("HOME");
         base = home && home[0] ? std::string(home) + "/.config" : "/tmp";
     }
-    return base + "/adsb/weather";
+    return base + "/flightlevel314/weather";
 }
 
 void ensure_dir(const std::string &path) {

@@ -50,7 +50,7 @@ static uint32_t _trails_cleared_at = 0;
 // draw_sweep() itself into "trail" vs "bloom+hub" sub-phases to find out
 // which part of *that* is the real villain, instead of guessing again.
 // Logs avg/max per phase every ~2s of wall time (not every frame, would
-// flood journalctl) to stdout/journalctl -u adsb-pi. Delete this whole
+// flood journalctl) to stdout/journalctl -u flightlevel314. Delete this whole
 // #if block (and every profile_record()/profile_maybe_log() call site)
 // once the actual bottleneck is identified and fixed -- same "temporary,
 // clearly marked, removed once its job is done" pattern as the earlier

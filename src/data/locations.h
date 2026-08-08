@@ -159,5 +159,5 @@ void locations_nearby_cache_clear();
 // immediately (serial_config.cpp's FACTORY_RESET does), at which point
 // locations_init() picks up the now-empty namespace on next boot.
 // Pi (locations_linux.cpp) also clears the in-memory tables and deletes
-// ~/.config/adsb/locations.json so a reboot is not required there.
+// ~/.config/flightlevel314/locations.json so a reboot is not required there.
 void locations_factory_reset();

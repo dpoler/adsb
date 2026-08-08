@@ -24,15 +24,9 @@ endif()
 set(CONFIG_LV_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(CONFIG_LV_BUILD_DEMOS OFF CACHE BOOL "" FORCE)
 
-# Must match whatever PlatformIO actually resolves platformio.ini's
-# `lvgl/lvgl@^9.2.2` to for jc1060, NOT that literal version string --
-# ^9.2.2 floats to the latest compatible 9.x release (currently 9.5.0,
-# confirmed via .pio/libdeps/jc1060/lvgl/library.json), and shared code
-# like src/ui/aircraft_icons.h uses APIs (lv_draw_triangle_dsc_t's
-# bg_color/bg_opa vs. an older color/opa naming) that genuinely differ
-# between LVGL 9.x point releases. If a fresh jc1060 build ever resolves a
-# newer 9.x and something here stops compiling, re-check that file and
-# bump this tag to match, don't just patch around the API diff locally.
+# Must match the LVGL version shared UI was last built against (v9.5.0).
+# Shared code (e.g. src/ui/aircraft_icons.h) uses APIs that differ across
+# LVGL 9.x point releases — bump deliberately when upgrading.
 include(FetchContent)
 FetchContent_Declare(
     lvgl
@@ -56,15 +50,22 @@ target_compile_definitions(lvgl PUBLIC LV_CONF_INCLUDE_SIMPLE)
 
 # pi/lv_conf.h sets LV_USE_OS=LV_OS_PTHREAD + LV_DRAW_SW_DRAW_UNIT_CNT>1 so
 # LVGL's SW renderer spawns worker threads. LVGL's CMake does not auto-link
-# libpthread from that define -- add it explicitly (PUBLIC so adsb_pi
+# libpthread from that define -- add it explicitly (PUBLIC so flightlevel314
 # inherits it).
 find_package(Threads REQUIRED)
 target_link_libraries(lvgl PUBLIC Threads::Threads)
 
-# Static large/medium airport glyph DB (gitignored). Without it, VIEW →
-# Other Airports has nothing to draw beyond saved locations. Generate at
-# configure time if missing so Pi builds match ESP32's usual local codegen.
+# Static large/medium airport glyph DB (gitignored). Generate at configure
+# time if missing. Also regenerate when an older header still has name[32]
+# (bumped to name[64] for full airport names in the picker/detail card).
 set(AIRPORTS_DB_H "${CMAKE_CURRENT_SOURCE_DIR}/../src/ui/airports_db.h")
+if(EXISTS "${AIRPORTS_DB_H}")
+    file(READ "${AIRPORTS_DB_H}" _adb_hdr LIMIT 800)
+    if(NOT _adb_hdr MATCHES "char name\\[64\\]")
+        message(STATUS "airports_db.h is outdated (need name[64]) — regenerating")
+        file(REMOVE "${AIRPORTS_DB_H}")
+    endif()
+endif()
 if(NOT EXISTS "${AIRPORTS_DB_H}")
     find_package(Python3 COMPONENTS Interpreter REQUIRED)
     message(STATUS "Generating ${AIRPORTS_DB_H} (OurAirports large/medium DB)")
@@ -82,9 +83,7 @@ if(NOT EXISTS "${AIRPORTS_DB_H}")
     endif()
 endif()
 
-# Shared with jc1060 (compiled here for Linux, via PlatformIO for ESP32) --
-# see src/data/aircraft.h and each file's own comments for the #if
-# defined(ARDUINO) forks where platform behavior actually differs.
+# Shared UI/data sources (historical ARDUINO forks remain in some files).
 set(SHARED_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/ui/views.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/ui/stats.cpp
@@ -100,13 +99,14 @@ set(SHARED_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/ui/view_menu.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/ui/alerts.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/ui/location_picker.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/ui/airports_lookup.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/data/http_mutex.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/data/error_log.cpp
 )
 
 find_package(CURL REQUIRED)
 
-add_executable(adsb_pi
+add_executable(flightlevel314
     main.cpp
     app_stubs.cpp
     settings_pi.cpp
@@ -124,36 +124,36 @@ add_executable(adsb_pi
     platform_linux/enrichment_linux.cpp
     ${SHARED_SOURCES}
 )
-target_include_directories(adsb_pi PRIVATE
+target_include_directories(flightlevel314 PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/../src
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/ui
 )
-target_link_libraries(adsb_pi PRIVATE lvgl ArduinoJson CURL::libcurl)
+target_link_libraries(flightlevel314 PRIVATE lvgl ArduinoJson CURL::libcurl)
 
 if(PI_DISPLAY_BACKEND STREQUAL "SDL")
     find_package(SDL2 REQUIRED)
-    target_sources(adsb_pi PRIVATE display_sdl.cpp input_sdl.cpp)
+    target_sources(flightlevel314 PRIVATE display_sdl.cpp input_sdl.cpp)
     # lvgl's own SDL driver .c files (src/drivers/sdl/*.c) need SDL2/SDL.h
     # too, not just our app code -- link SDL2 to the lvgl target itself
-    # (PUBLIC so adsb_pi inherits it transitively).
+    # (PUBLIC so flightlevel314 inherits it transitively).
     target_link_libraries(lvgl PUBLIC SDL2::SDL2)
 elseif(PI_DISPLAY_BACKEND STREQUAL "DRM")
     find_package(PkgConfig REQUIRED)
     pkg_check_modules(DRM REQUIRED libdrm)
     pkg_check_modules(LIBINPUT REQUIRED libinput)
-    target_sources(adsb_pi PRIVATE display_drm.cpp input_libinput.cpp)
-    target_include_directories(adsb_pi PRIVATE ${DRM_INCLUDE_DIRS} ${LIBINPUT_INCLUDE_DIRS})
-    target_link_libraries(adsb_pi PRIVATE ${DRM_LIBRARIES} ${LIBINPUT_LIBRARIES})
+    target_sources(flightlevel314 PRIVATE display_drm.cpp input_libinput.cpp)
+    target_include_directories(flightlevel314 PRIVATE ${DRM_INCLUDE_DIRS} ${LIBINPUT_INCLUDE_DIRS})
+    target_link_libraries(flightlevel314 PRIVATE ${DRM_LIBRARIES} ${LIBINPUT_LIBRARIES})
     # LVGL's own driver sources (src/drivers/display/drm/lv_linux_drm.c,
     # src/drivers/indev/libinput/lv_libinput.c) are compiled as part of the
-    # `lvgl` target itself, not adsb_pi -- lv_conf.h's LV_USE_LINUX_DRM/
+    # `lvgl` target itself, not flightlevel314 -- lv_conf.h's LV_USE_LINUX_DRM/
     # LV_USE_LIBINPUT (set whenever PI_BACKEND_DRM reaches it, which it does
     # for every target via the directory-scope add_compile_definitions
     # above) means lvgl.h unconditionally pulls in <xf86drmMode.h> ->
     # <drm.h> for every single LVGL source file, not just ours. Without
     # these same include dirs on the `lvgl` target, its own compilation
-    # fails before adsb_pi is ever reached (Debian ships drm.h under
+    # fails before flightlevel314 is ever reached (Debian ships drm.h under
     # /usr/include/libdrm/, not /usr/include/ directly -- only libdrm's own
     # pkg-config Cflags know to add that -I).
     target_include_directories(lvgl PUBLIC ${DRM_INCLUDE_DIRS} ${LIBINPUT_INCLUDE_DIRS})

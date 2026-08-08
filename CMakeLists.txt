@@ -1,9 +1,8 @@
 cmake_minimum_required(VERSION 3.16)
-project(adsb_pi_port LANGUAGES C CXX)
+project(FlightLevel314 LANGUAGES C CXX)
 
-# platformio.ini drives the ESP32 (jc1060) build; this CMake project only
-# builds the Raspberry Pi / Linux target. Everything Pi-specific lives
-# under pi/, outside src/ -- PlatformIO's default src_dir is src/ and
-# auto-compiles everything under it, so Linux-only code (libcurl, <mutex>,
-# DRM headers) has to stay out of there or it'd break the jc1060 build.
+# FlightLevel314 — Raspberry Pi / Linux ADS-B display (forked from
+# dpoler/adsb's Pi port). ESP32/jc1060 PlatformIO builds are not part of
+# this project; historical ESP32 notes remain in docs/ for optional
+# cherry-picks later.
 add_subdirectory(pi)

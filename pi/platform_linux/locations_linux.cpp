@@ -9,7 +9,7 @@
 // fresh rather than force a shared abstraction onto genuinely
 // platform-specific plumbing (see project_pi_port memory).
 //
-// Storage: a single JSON file (~/.config/adsb/locations.json), one entry per
+// Storage: a single JSON file (~/.config/flightlevel314/locations.json), one entry per
 // saved location, each with its own "nearby" array embedded directly.
 // Unlike the ESP32 side (which lazily loads only the *active* location's
 // nearby-airport cache to save DRAM), every location's nearby list is kept
@@ -72,9 +72,9 @@ bool _nearby_scan_active = false; // best-effort: skip a second concurrent scan 
 
 std::string config_dir() {
     const char *xdg = getenv("XDG_CONFIG_HOME");
-    if (xdg && xdg[0]) return std::string(xdg) + "/adsb";
+    if (xdg && xdg[0]) return std::string(xdg) + "/flightlevel314";
     const char *home = getenv("HOME");
-    return std::string(home ? home : ".") + "/.config/adsb";
+    return std::string(home ? home : ".") + "/.config/flightlevel314";
 }
 
 std::string locations_file_path() {
@@ -397,7 +397,7 @@ bool locations_add_from_icao(const char *icao, char *err, size_t err_size) {
     }
 
     Location loc;
-    if (!g_config.airportdb_token[0]) {
+    if (!g_config.airportdb_enabled || !g_config.airportdb_token[0]) {
 #if HAS_AIRPORTS_DB
         bool found = false;
         for (int i = 0; i < AIRPORTS_DB_COUNT; i++) {
@@ -411,9 +411,14 @@ bool locations_add_from_icao(const char *icao, char *err, size_t err_size) {
                 break;
             }
         }
-        if (!found) return fail("no airportdb.io token set, and this airport isn't in the static database");
+        if (!found) {
+            if (!g_config.airportdb_token[0])
+                return fail("no airportdb.io token set, and this airport isn't in the static database");
+            return fail("airportdb.io disabled, and this airport isn't in the static database");
+        }
 #else
-        return fail("no airportdb.io token set");
+        if (!g_config.airportdb_token[0]) return fail("no airportdb.io token set");
+        return fail("airportdb.io disabled");
 #endif
     } else if (!fetch_airport_data(icao_upper, loc, err, err_size)) {
         return false;

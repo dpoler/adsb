@@ -1,31 +1,31 @@
-# ADS-B Display Project — Full Knowledge Dump
+# ADS-B Display / FlightLevel314 — Project Knowledge
 
-> **Agent note:** Canonical cross-session knowledge for the *whole* ADS-B project
-> (ESP32 `jc1060` + Raspberry Pi port), not only `pi-port`. Imported 2026-08-07
-> from a Claude knowledge dump. Point-in-time observations — verify against
-> current code before treating specific file:line / "done" claims as live.
-> Day-to-day agent rules live in `AGENTS.md`; this file holds history, backlog,
-> and deeper rationale.
+> **Agent note:** This file began as the knowledge dump for `dpoler/adsb`
+> (ESP32 jc1060 + Pi port). On **2026-08-08** the Pi work was forked into
+> **FlightLevel314** and jc1060 development was paused. Keep ESP32 history
+> here for optional cherry-picks; new work targets Pi/Linux only unless
+> explicitly asked otherwise. Day-to-day agent rules live in `AGENTS.md`.
 
 
-Generated 2026-08-07 from accumulated cross-session memory. This is a point-in-time
-snapshot — memory entries are point-in-time observations, not live state. Verify
-against current code before treating any specific claim (file:line, function name,
-"done" status) as still true.
+Generated 2026-08-07 from accumulated cross-session memory; FlightLevel314
+fork notes added 2026-08-08. Point-in-time snapshot — verify against current
+code before treating any specific claim as still true.
 
-Current git branch at time of writing: `pi-port` (clean working tree). Main branch: `master`.
+Current product: **FlightLevel314** (Pi). Historical ESP32 branch: `dpoler/adsb`.
 
 ---
 
 ## 1. What this project is
 
-A touchscreen ADS-B aircraft display device. Originally a single ESP32-P4 board
-target; now also being ported to a Raspberry Pi. Shows live aircraft traffic
-(pulled from adsb.lol) on Map/Radar/List(Arrivals)/Stats views, with a
-location-picker system (Home + saved airports/waypoints), filters, trails, alerts
-for military/emergency squawks, and more.
+**FlightLevel314** — a touchscreen ADS-B aircraft display for Raspberry Pi
+(Waveshare 10.1" DSI, 1280×800). Live traffic from adsb.lol on Map / Radar /
+Arrivals / Stats, with saved locations, filters, trails, alerts,
+basemap/weather, and optional AeroDataBox O/D + AirportDB enrichment.
 
----
+Originally also an ESP32-P4 (jc1060) target in `dpoler/adsb`. That board is
+**paused** in this fork; features can be brought back to the ESP32 tree later
+by comparing against this project.
+
 
 ## 2. Board targets (ESP32 side)
 
@@ -338,7 +338,7 @@ detail card. See backlog §7 for full scope.
 
 ---
 
-## 7. Full backlog (as of 2026-08-06/07)
+## 7. Full backlog (as of 2026-08-08)
 
 This preserves essentially the full detail of every backlog entry — done items
 are kept for their debugging trail/rationale (useful history), open items are
@@ -346,6 +346,65 @@ what's actually outstanding. Grouped roughly by theme; original memory file is
 mostly chronological.
 
 ### 7.1 Genuinely open / not started
+
+- **Write a proper FlightLevel314 README.md (with original-author credit)**:
+  the current README is a serviceable port of the Pi docs, but needs a real
+  project README — clearer product pitch, install/build, screenshots later,
+  and an explicit **Credits** section naming the original author (**Neil**,
+  see `LICENSE` copyright) and the upstream lineage (`dpoler/adsb` /
+  ESP32-era work this Pi fork grew from). **Do not start until explicitly
+  asked** — noted 2026-08-08 when `dpoler/FlightLevel314` was created.
+
+- **Detail card photo credit appears before the photo**: photographer credit
+  text can pop into the summary/detail area before the aircraft photo has
+  finished loading (or when the image path fails / is still decoding). Credit
+  should stay hidden until pixels are actually shown, or sit only under the
+  photo slot. **Do not start until explicitly asked** — reported 2026-08-08.
+
+- **Location switch: successful fetch but empty Map for a couple of refreshes**:
+  switching active location from Heathrow (EGLL) to Denver, `adsb.lol`
+  appeared to fetch successfully but no aircraft rendered for a couple of
+  refresh cycles afterward. Possible stale list / range filter / projection
+  center race, or a brief empty payload accepted as OK before the new
+  location's traffic arrives. Repro and root-cause not done. **Do not start
+  until explicitly asked** — reported 2026-08-08.
+
+- **Basemap / sectional coverage outside the US (esp. UK)**: FAA VFR
+  sectional style is US-charting only — expected empty/useless for UK and
+  other non-US regions; either gate the style by geography or label it
+  US-only in the VIEW menu. Separately, at EGLL (~51.47N) with dark_nolabels
+  @ 10 nm the basemap worker aborts: `tile AABB too large (25x18 at z=13)`
+  (`pi/basemap.cpp` guard `tiles_w * tiles_h > 300`) after cache TTL expiry,
+  so the map never rebuilds. Mercator AABB vs equirectangular canvas grows
+  with latitude; need a zoom/AABB fix and a pass verifying **all** basemap
+  styles at representative worldwide locations (low / mid / high lat, both
+  hemispheres). **Do not start until explicitly asked** — reported
+  2026-08-08.
+
+- **Include small airports in the static on-device airport DB**: today's
+  `tools/generate_airports_db.py` keeps only OurAirports `large_airport` +
+  `medium_airport` (~5k entries, ~0.4 MB const with `name[64]`). Adding
+  `small_airport` (ident ≤4, same filter) is ~+25.6k rows → ~30.6k total and
+  ~2.5 MB aligned const flash (~+2.1 MB). Header text scales similarly
+  (~0.35 → ~2.1 MB). Fine on Pi; painful if the same table stays shared with
+  ESP32. **Do not start until explicitly asked** — sized 2026-08-08.
+
+- ~~**Fork the Pi port into its own project/repo**~~: **Done 2026-08-08** as
+  **FlightLevel314** — https://github.com/dpoler/FlightLevel314 (`master`
+  seeded from `cursor/flightlevel314-7c95`). jc1060 / PlatformIO removed;
+  history retained for cherry-picks. Optional later: strip leftover
+  `#if defined(ARDUINO)` from `src/`.
+
+- **Pi online app updates (check / notify / pull / restart)**: periodically
+  check whether a newer `adsb_pi` (or package) is available, surface a
+  non-intrusive "update available" notice in the UI, download it, and restart
+  into the new build. Not designed — open questions include update source
+  (GitHub Releases vs self-hosted URL vs apt), signature/verification,
+  whether the kiosk systemd unit should own the swap, and how aggressive the
+  check cadence should be on a wall-mounted always-on display. Related to the
+  Settings "Device" column / "Check for Update" idea below, but that entry was
+  framed around ESP32 OTA; this is the Pi-native equivalent. **Do not start
+  until explicitly asked** — parked 2026-08-08 so it isn't forgotten.
 
 - **planespotters.net photo fetch — dead on jc1060, revive for Pi**: PSRAM
   cache-coherency erratum on jc1060 corrupts image data (a genuine hardware
