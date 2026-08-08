@@ -390,11 +390,10 @@ mostly chronological.
   ESP32. **Do not start until explicitly asked** — sized 2026-08-08.
 
 - ~~**Fork the Pi port into its own project/repo**~~: **Done 2026-08-08** as
-  **FlightLevel314**. Repo `dpoler/FlightLevel314` created; jc1060 /
-  PlatformIO removed from this tree; history retained for cherry-picks.
-  Initial push of `cursor/flightlevel314-7c95` → `FlightLevel314:master` may
-  still need a human (cloud token got 403 writing the new repo). Optional
-  later: strip leftover `#if defined(ARDUINO)` from `src/`.
+  **FlightLevel314** — https://github.com/dpoler/FlightLevel314 (`master`
+  seeded from `cursor/flightlevel314-7c95`). jc1060 / PlatformIO removed;
+  history retained for cherry-picks. Optional later: strip leftover
+  `#if defined(ARDUINO)` from `src/`.
 
 - **Pi online app updates (check / notify / pull / restart)**: periodically
   check whether a newer `adsb_pi` (or package) is available, surface a

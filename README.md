@@ -94,12 +94,7 @@ Logs: `journalctl -u flightlevel314 -f`.
 
 ## Publishing this fork to GitHub
 
-Cloud agents cannot create new repos under `dpoler`. Create an empty public
-repo named **FlightLevel314**, then:
+Canonical repo: **https://github.com/dpoler/FlightLevel314**
 
-```bash
-git remote add fl314 https://github.com/dpoler/FlightLevel314.git
-git push -u fl314 cursor/flightlevel314-7c95:master
-```
-
-(Or push whatever branch you want as `master`.)
+Local clone: `~/Projects/FlightLevel314`. The paused ESP32 line stays in
+`dpoler/adsb` / `~/Projects/adsb`.
